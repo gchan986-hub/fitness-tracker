@@ -1,122 +1,154 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { History } from './components/History'
+import { Settings } from './components/Settings'
+import { WorkoutForm } from './components/WorkoutForm'
+import { deleteWorkout, listWorkouts, saveWorkout } from './lib/db'
+import { exerciseNames } from './lib/stats'
+import type { WeightUnit, Workout } from './lib/types'
 
-function App() {
-  const [count, setCount] = useState(0)
+type Tab = 'log' | 'history' | 'progress' | 'settings'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'log', label: 'Log' },
+  { id: 'history', label: 'History' },
+  { id: 'progress', label: 'Progress' },
+  { id: 'settings', label: 'Settings' },
+]
+const Progress = lazy(() => import('./components/Progress').then((m) => ({ default: m.Progress })))
+const UNIT_KEY = 'fitness-tracker:unit'
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function readUnit(): WeightUnit {
+  try {
+    return localStorage.getItem(UNIT_KEY) === 'lb' ? 'lb' : 'kg'
+  } catch {
+    return 'kg'
+  }
 }
 
-export default App
+export default function App() {
+  const [tab, setTab] = useState<Tab>('log')
+  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [editing, setEditing] = useState<Workout>()
+  const [unit, setUnit] = useState<WeightUnit>(readUnit)
+  const [toast, setToast] = useState('')
+
+  const reload = useCallback(async () => {
+    try {
+      setWorkouts(await listWorkouts())
+    } catch (err) {
+      setLoadError(`Could not open local storage: ${(err as Error).message}`)
+    } finally {
+      setLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    listWorkouts()
+      .then((ws) => active && setWorkouts(ws))
+      .catch((err: Error) => active && setLoadError(`Could not open local storage: ${err.message}`))
+      .finally(() => active && setLoaded(true))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 2500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  const names = useMemo(() => exerciseNames(workouts), [workouts])
+
+  const changeUnit = (u: WeightUnit) => {
+    setUnit(u)
+    try {
+      localStorage.setItem(UNIT_KEY, u)
+    } catch {
+      /* preference just won't persist */
+    }
+  }
+
+  const save = async (w: Workout) => {
+    await saveWorkout(w)
+    await reload()
+    setToast(editing ? 'Workout updated' : 'Workout saved')
+    if (editing) {
+      setEditing(undefined)
+      setTab('history')
+    }
+  }
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <h1>Fitness Tracker</h1>
+      </header>
+      <main>
+        {loadError && <p className="errors" role="alert">{loadError}</p>}
+        {!loaded ? (
+          <p className="muted">Loading…</p>
+        ) : tab === 'log' ? (
+          <WorkoutForm
+            key={editing?.id ?? 'new'}
+            unit={unit}
+            history={workouts}
+            knownExercises={names}
+            editing={editing}
+            onSave={save}
+            onCancel={
+              editing
+                ? () => {
+                    setEditing(undefined)
+                    setTab('history')
+                  }
+                : undefined
+            }
+          />
+        ) : tab === 'history' ? (
+          <History
+            workouts={workouts}
+            unit={unit}
+            onEdit={(w) => {
+              setEditing(w)
+              setTab('log')
+            }}
+            onDelete={async (w) => {
+              await deleteWorkout(w.id)
+              await reload()
+              setToast('Workout deleted')
+            }}
+          />
+        ) : tab === 'progress' ? (
+          <Suspense fallback={<p className="muted">Loading chart…</p>}>
+            <Progress workouts={workouts} exercises={names} unit={unit} />
+          </Suspense>
+        ) : (
+          <Settings unit={unit} onUnitChange={changeUnit} onImported={reload} />
+        )}
+      </main>
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
+      <nav className="tabbar" aria-label="Sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-current={tab === t.id ? 'page' : undefined}
+            onClick={() => {
+              if (t.id !== 'log') setEditing(undefined)
+              setTab(t.id)
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  )
+}

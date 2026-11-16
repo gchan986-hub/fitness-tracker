@@ -1,32 +1,53 @@
-# React + TypeScript + Vite
+# Fitness Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A mobile-friendly workout log you can install on your phone's home screen (PWA).
 
-Currently, two official plugins are available:
+- **Log** workouts: exercises with sets, reps and weight. Picking an exercise you've done before pre-fills last session's sets; “Add set” copies the previous set.
+- **History** of every workout, newest first, with total volume. Edit or delete any entry.
+- **Progress** chart per exercise (estimated 1-rep max, heaviest set, or volume) plus personal records.
+- **Settings**: kg or lb, and backup export/import as JSON.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Data stays on your device in the browser (IndexedDB). There are no accounts and no server. Use **Settings → Download backup** regularly. Clearing the browser's site data deletes your workouts.
 
-## React Compiler
+## Install on your phone
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Open the published URL, then:
+- **iPhone (Safari):** Share → *Add to Home Screen*.
+- **Android (Chrome):** menu → *Install app*.
 
-## Expanding the Oxlint configuration
+It works offline after the first visit.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Develop
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+Requires Node 22+.
+
+```sh
+npm install
+npm run dev        # local dev server
+npm test           # unit + UI tests (Vitest, jsdom, fake-indexeddb)
+npm run lint
+npm run build      # production build in dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Stack
+
+React + TypeScript + Vite, `idb` for IndexedDB, Recharts for charts, `vite-plugin-pwa` for the service worker and manifest, Vitest + Testing Library for tests.
+
+```
+src/
+  lib/          pure logic and storage (types, stats, units, validation, db)
+  components/   WorkoutForm, History, Progress, Settings
+  App.tsx       tabs and app state
+```
+
+Weights are always stored in kilograms and converted for display. Estimated 1RM uses the Epley formula: `weight × (1 + reps / 30)`.
+
+## Deploy
+
+`.github/workflows/ci.yml` runs lint, tests and a build on every push and PR, and deploys `main` to GitHub Pages. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+## Roadmap
+
+- Cardio (distance / time / pace)
+- Saved routines and a rest timer
+- Weekly summary and streaks
