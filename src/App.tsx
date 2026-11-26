@@ -1,10 +1,21 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { History } from './components/History'
+import { RestTimer } from './components/RestTimer'
 import { Routines } from './components/Routines'
 import { Settings } from './components/Settings'
 import { WorkoutForm, type WorkoutFormHandle } from './components/WorkoutForm'
 import { deleteRoutine, deleteWorkout, listRoutines, listWorkouts, saveRoutine, saveWorkout } from './lib/db'
 import { newId } from './lib/id'
+import {
+  readRestSec,
+  readRestSound,
+  readRestState,
+  saveRestSec,
+  saveRestSound,
+  saveRestState,
+  unlockAudio,
+  type RestState,
+} from './lib/rest'
 import { findRoutineByName, fullCatalog } from './lib/routines'
 import { exerciseCatalog } from './lib/stats'
 import type { Routine, RoutineInput, Units, Workout } from './lib/types'
@@ -43,6 +54,9 @@ export default function App() {
   const [editing, setEditing] = useState<Workout>()
   const [units, setUnits] = useState<Units>(readUnits)
   const [toast, setToast] = useState('')
+  const [restSec, setRestSec] = useState(readRestSec)
+  const [restSound, setRestSound] = useState(readRestSound)
+  const [rest, setRestState] = useState<RestState | null>(() => readRestState())
   const formRef = useRef<WorkoutFormHandle>(null)
 
   const reload = useCallback(async () => {
@@ -89,6 +103,21 @@ export default function App() {
     }
   }
 
+  const setRest = useCallback((r: RestState | null) => {
+    setRestState(r)
+    saveRestState(r)
+  }, [])
+  const startRest = () => {
+    unlockAudio()
+    setRest({ endAt: Date.now() + restSec * 1000, totalSec: restSec })
+  }
+  const adjustRest = (delta: number) => {
+    if (!rest) return
+    const endAt = Math.max(Date.now(), rest.endAt + delta * 1000)
+    setRest({ endAt, totalSec: Math.max(rest.totalSec + delta, Math.ceil((endAt - Date.now()) / 1000)) })
+  }
+  const dismissRest = useCallback(() => setRest(null), [setRest])
+
   const goTo = (t: Tab) => {
     if (t !== 'log') setEditing(undefined)
     setTab(t)
@@ -126,7 +155,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={rest ? 'app resting' : 'app'}>
       <header className="topbar">
         <h1>Fitness Tracker</h1>
       </header>
@@ -150,6 +179,7 @@ export default function App() {
                 routines={routines}
                 onSave={saveNew}
                 onSaveRoutine={saveRoutineInput}
+                onSetDone={startRest}
               />
             </div>
             {tab === 'log' && editing && (
@@ -212,11 +242,23 @@ export default function App() {
                 onImported={reload}
                 workoutCount={workouts.length}
                 routineCount={routines.length}
+                restSec={restSec}
+                onRestSecChange={(sec) => {
+                  setRestSec(sec)
+                  saveRestSec(sec)
+                }}
+                restSound={restSound}
+                onRestSoundChange={(on) => {
+                  setRestSound(on)
+                  saveRestSound(on)
+                  if (on) unlockAudio()
+                }}
               />
             )}
           </>
         )}
       </main>
+      {rest && <RestTimer rest={rest} sound={restSound} onAdjust={adjustRest} onDismiss={dismissRest} />}
       {toast && (
         <div className="toast" role="status">
           {toast}

@@ -1,7 +1,7 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IDBFactory } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { _resetForTests, listRoutines, saveRoutine, saveWorkout } from './lib/db'
 import { cardio, sets, workout } from './test/fixtures'
@@ -466,5 +466,80 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Delete all routines (1)' }))
     expect(await screen.findByRole('button', { name: 'Delete all routines (0)' })).toBeDisabled()
     expect(await listRoutines()).toEqual([])
+  })
+
+  describe('rest timer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    })
+    afterEach(() => vi.useRealTimers())
+    const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+    const timer = () => screen.queryByRole('timer', { name: 'Rest timer' })
+
+    it('starts when a set is ticked, counts down, adjusts and can be skipped', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await addExercise(user, 'Squat')
+      await user.type(screen.getByLabelText('Exercise 1 set 1 reps'), '5')
+      expect(timer()).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      expect(screen.getByRole('button', { name: 'Exercise 1 set 1 done' })).toHaveAttribute('aria-pressed', 'true')
+      expect(timer()).toHaveTextContent('Rest 1:30')
+
+      await advance(15_000)
+      expect(timer()).toHaveTextContent('Rest 1:15')
+      await user.click(screen.getByRole('button', { name: '15 seconds more' }))
+      expect(timer()).toHaveTextContent(/Rest 1:(30|29)/)
+      await user.click(screen.getByRole('button', { name: '15 seconds less' }))
+      await user.click(screen.getByRole('button', { name: '15 seconds less' }))
+      expect(timer()).toHaveTextContent(/Rest 1:0[01]/)
+
+      // Keeps running on other tabs
+      await user.click(tab('History'))
+      expect(timer()).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Skip' }))
+      expect(timer()).not.toBeInTheDocument()
+
+      // Unticking doesn't start a new rest
+      await user.click(tab('Log'))
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      expect(timer()).not.toBeInTheDocument()
+    })
+
+    it('says when rest is over, vibrates, then hides', async () => {
+      const vibrate = vi.fn()
+      Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await addExercise(user, 'Squat')
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      await advance(90_000)
+      expect(timer()).toHaveTextContent('Rest over · next set')
+      expect(vibrate).toHaveBeenCalledTimes(1)
+      await advance(5_000)
+      expect(vibrate).toHaveBeenCalledTimes(1)
+      await advance(15_000)
+      expect(timer()).not.toBeInTheDocument()
+    })
+
+    it('uses the rest length chosen in Settings', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.selectOptions(screen.getByLabelText('Rest between sets'), '60')
+      await user.click(screen.getByRole('checkbox', { name: /Beep when rest is over/ }))
+      expect(localStorage.getItem('fitness-tracker:rest-sec')).toBe('60')
+      expect(localStorage.getItem('fitness-tracker:rest-sound')).toBe('off')
+      await user.click(tab('Log'))
+      await addExercise(user, 'Run')
+      expect(screen.queryByRole('button', { name: /done$/ })).not.toBeInTheDocument() // no ✓ on cardio
+      await addExercise(user, 'Squat')
+      await user.click(screen.getByRole('button', { name: '+ Add set' }))
+      await user.click(screen.getByRole('button', { name: 'Exercise 2 set 2 done' }))
+      expect(timer()).toHaveTextContent('Rest 1:00')
+      expect(screen.getByRole('button', { name: 'Exercise 2 set 1 done' })).toHaveAttribute('aria-pressed', 'false')
+    })
   })
 })

@@ -139,3 +139,19 @@ button:disabled { opacity: 0.5; cursor: default; }
 .routine-ex-name { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .routine-ex-name .tag { align-self: flex-start; }
 .equipment-mini { min-height: 36px; padding: 0.2rem 0.5rem; width: auto; max-width: 100%; }
+.sets.with-done .set-row { grid-template-columns: 1.6rem 1fr 1fr 36px 44px; }
+.set-row.done input { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.done-btn { min-width: 44px; padding: 0; font-weight: 700; color: var(--muted); }
+.done-btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.app.resting { padding-bottom: calc(8.5rem + env(safe-area-inset-bottom)); }
+.app.resting .toast { bottom: calc(9rem + env(safe-area-inset-bottom)); }
+.rest-bar {
+  position: fixed; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom)); z-index: 3;
+  max-width: 640px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.5rem 1rem; background: var(--text); color: var(--bg); overflow: hidden;
+}
+.rest-bar.over { background: var(--accent); color: var(--accent-text); }
+.rest-progress { position: absolute; left: 0; top: 0; height: 3px; background: var(--accent); transition: width 0.25s linear; }
+.rest-time { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rest-actions { display: flex; gap: 0.35rem; }
+.rest-actions button { min-height: 40px; padding: 0.3rem 0.7rem; background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 35%, transparent); }

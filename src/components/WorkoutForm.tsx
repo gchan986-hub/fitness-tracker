@@ -13,6 +13,8 @@ interface SetDraft {
   key: string
   reps: string
   weight: string
+  /** Ticked off during the session (not saved). */
+  done?: boolean
 }
 interface ExerciseDraft {
   key: string
@@ -113,10 +115,12 @@ interface Props {
   onSave: (w: Workout) => Promise<void>
   onSaveRoutine: (input: RoutineInput) => Promise<boolean>
   onCancel?: () => void
+  /** When given, each set gets a ✓ button that calls this (to start the rest timer). */
+  onSetDone?: () => void
   ref?: Ref<WorkoutFormHandle>
 }
 
-export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, ref }: Props) {
+export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, onSetDone, ref }: Props) {
   const listId = useId()
   const [date, setDate] = useState(editing?.date ?? todayLocal())
   const [notes, setNotes] = useState(editing?.notes ?? '')
@@ -386,15 +390,16 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
               </>
             ) : (
               <>
-                <div className="sets">
+                <div className={onSetDone ? 'sets with-done' : 'sets'}>
                   <div className="set-row set-head" aria-hidden>
                     <span>Set</span>
                     <span>Reps</span>
                     <span>{weightHeading(ex.equipment, units.weight)}</span>
                     <span />
+                    {onSetDone && <span />}
                   </div>
                   {ex.sets.map((s, j) => (
-                    <div className="set-row" key={s.key}>
+                    <div className={s.done ? 'set-row done' : 'set-row'} key={s.key}>
                       <span className="set-num">{j + 1}</span>
                       <input
                         aria-label={`Exercise ${n} set ${j + 1} reps`}
@@ -422,6 +427,20 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                       >
                         ✕
                       </button>
+                      {onSetDone && (
+                        <button
+                          type="button"
+                          className="done-btn"
+                          aria-label={`Exercise ${n} set ${j + 1} done`}
+                          aria-pressed={!!s.done}
+                          onClick={() => {
+                            updateSet(ex.key, s.key, { done: !s.done })
+                            if (!s.done) onSetDone()
+                          }}
+                        >
+                          ✓
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

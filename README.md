@@ -8,6 +8,7 @@ A mobile-friendly workout log you can install on your phone's home screen (PWA).
 - **Routines**: save a session's exercises as a named routine (e.g. "Push day"), optionally tagged with weekdays. On the Log screen, tap a routine to load its exercises filled in with your latest numbers; routines planned for that day are shown first, marked "Today". Create, edit, reorder and delete routines on the Routines tab, or save any past workout from History as a routine.
 - **Adding exercises**: the Log screen starts empty. "+ Add exercise" opens a full-screen list with body-part tabs (All, Yours, Chest, Back, Legs, Shoulders, Arms, Core, Full body, Cardio) and search. Tap an exercise and it's added to the workout with last session's numbers. Your own exercises come first and are sorted into body parts when the name matches the ~75 built-in suggestions (`src/lib/defaultExercises.ts`). Anything not listed can be added as weights or cardio. The routine editor uses the same list.
 - **Equipment** for every weights exercise: Barbell, Dumbbell, Machine, Plate-loaded, Cable, Kettlebell, Smith machine, Bodyweight or Band. Built-in exercises come with a usual default you can change. The same lift on different equipment is tracked separately (its own progress chart, records and pre-filled numbers). Dumbbell weight is per dumbbell; bodyweight weight is added weight. Workouts logged before equipment existed take the default for that exercise.
+- **Rest timer**: tap ✓ on a set to mark it done and start a countdown (default 90 s, set in Settings). A bar above the tabs shows the time left with −15s / +15s / Skip, then beeps and vibrates (where supported) when rest is over. It keeps the screen awake while counting and survives switching tabs or reopening the app. On iPhone the beep follows the silent switch and needs the app open.
 - **Settings**: kg or lb, km or mi, and backup export/import as JSON (includes routines).
 
 Data stays on your device in the browser (IndexedDB). There are no accounts and no server. Use **Settings → Download backup** regularly. Clearing the browser's site data deletes your workouts.
@@ -51,7 +52,6 @@ Weights are always stored in kilograms and distances in kilometres, converted fo
 
 ## Roadmap
 
-- Rest timer
 - Weekly summary and streaks
 
 ### Later: a native iPhone app

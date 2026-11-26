@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { clearRoutines, clearWorkouts, exportBackup, importBackup } from '../lib/db'
 import { todayLocal } from '../lib/id'
+import { REST_OPTIONS } from '../lib/rest'
+import { formatDuration } from '../lib/units'
 import type { Units } from '../lib/types'
 
 interface Props {
@@ -10,11 +12,25 @@ interface Props {
   onImported: () => void
   workoutCount: number
   routineCount: number
+  restSec: number
+  onRestSecChange: (sec: number) => void
+  restSound: boolean
+  onRestSoundChange: (on: boolean) => void
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-export function Settings({ units, onUnitsChange, onImported, workoutCount, routineCount }: Props) {
+export function Settings({
+  units,
+  onUnitsChange,
+  onImported,
+  workoutCount,
+  routineCount,
+  restSec,
+  onRestSecChange,
+  restSound,
+  onRestSoundChange,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const [deleteMessage, setDeleteMessage] = useState('')
@@ -80,6 +96,27 @@ export function Settings({ units, onUnitsChange, onImported, workoutCount, routi
             {u}
           </label>
         ))}
+      </fieldset>
+      <fieldset className="card">
+        <legend>Rest timer</legend>
+        <label className="field">
+          Rest between sets
+          <select value={restSec} onChange={(e) => onRestSecChange(Number(e.target.value))}>
+            {REST_OPTIONS.map((sec) => (
+              <option key={sec} value={sec}>
+                {sec < 60 ? `${sec} sec` : `${formatDuration(sec)} min`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="radio">
+          <input type="checkbox" checked={restSound} onChange={(e) => onRestSoundChange(e.target.checked)} /> Beep when
+          rest is over
+        </label>
+        <p className="muted">
+          Tap ✓ on a set to start the timer. On iPhone the beep is silent when the ring/silent switch is on, and the
+          app has to be open.
+        </p>
       </fieldset>
       <div className="card">
         <h3>Backup</h3>
