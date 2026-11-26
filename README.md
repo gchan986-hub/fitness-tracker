@@ -5,7 +5,9 @@ A mobile-friendly workout log you can install on your phone's home screen (PWA).
 - **Log** workouts mixing **weights** (sets, reps, weight) and **cardio** (distance, time, live pace). Each exercise has a Weights/Cardio switch; distance is optional for things like classes. Picking an exercise you've done before switches to its type and pre-fills last session's numbers; “Add set” copies the previous set.
 - **History** of every workout, newest first, with total weights volume and cardio distance. Edit or delete any entry.
 - **Progress** chart per exercise. Weights: estimated 1-rep max, heaviest set or volume. Cardio: distance, pace or time. Plus personal records for each.
-- **Settings**: kg or lb, km or mi, and backup export/import as JSON.
+- **Routines**: save a session's exercises as a named routine (e.g. "Push day"), optionally tagged with weekdays. On the Log screen, tap a routine to load its exercises filled in with your latest numbers; routines planned for that day are shown first, marked "Today". Create, edit, reorder and delete routines on the Routines tab, or save any past workout from History as a routine.
+- **Exercise list**: "Pick from list" on the Log screen (and in the routine editor) is a searchable catalog of every exercise you've logged or saved, where you can also add new ones.
+- **Settings**: kg or lb, km or mi, and backup export/import as JSON (includes routines).
 
 Data stays on your device in the browser (IndexedDB). There are no accounts and no server. Use **Settings → Download backup** regularly. Clearing the browser's site data deletes your workouts.
 
@@ -36,7 +38,7 @@ React + TypeScript + Vite, `idb` for IndexedDB, Recharts for charts, `vite-plugi
 ```
 src/
   lib/          pure logic and storage (types, stats, units, validation, db)
-  components/   WorkoutForm, History, Progress, Settings
+  components/   WorkoutForm, History, Progress, Routines, Settings and shared pieces
   App.tsx       tabs and app state
 ```
 
@@ -48,7 +50,7 @@ Weights are always stored in kilograms and distances in kilometres, converted fo
 
 ## Roadmap
 
-- Saved routines and a rest timer
+- Rest timer
 - Weekly summary and streaks
 
 ### Later: a native iPhone app

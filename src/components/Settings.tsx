@@ -25,8 +25,11 @@ export function Settings({ units, onUnitsChange, onImported }: Props) {
 
   const upload = async (file: File) => {
     try {
-      const count = await importBackup(JSON.parse(await file.text()))
-      setMessage(`Imported ${count} workout${count === 1 ? '' : 's'}.`)
+      const { workouts, routines } = await importBackup(JSON.parse(await file.text()))
+      const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+      setMessage(
+        `Imported ${plural(workouts, 'workout')}${routines ? ` and ${plural(routines, 'routine')}` : ''}.`,
+      )
       onImported()
     } catch (err) {
       setMessage(err instanceof SyntaxError ? 'That file is not valid JSON.' : (err as Error).message)

@@ -1,9 +1,12 @@
-import { useId, useState } from 'react'
+import { useId, useImperativeHandle, useState, type Ref } from 'react'
 import { newId, todayLocal } from '../lib/id'
-import { isCardio, kindOf, lastEntryFor } from '../lib/stats'
-import type { ExerciseEntry, ExerciseKind, Units, Workout } from '../lib/types'
+import { dedupeExercises, sortRoutines, weekdayOf } from '../lib/routines'
+import { isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
+import type { ExerciseEntry, ExerciseKind, Routine, RoutineExercise, RoutineInput, Units, Workout } from '../lib/types'
 import { formatPace, fromKg, fromKm, toKg, toKm } from '../lib/units'
 import { validateWorkout } from '../lib/validate'
+import { ExercisePicker } from './ExercisePicker'
+import { SaveRoutinePanel } from './SaveRoutinePanel'
 
 interface SetDraft {
   key: string
@@ -81,17 +84,25 @@ function draftToEntry(d: ExerciseDraft, units: Units): ExerciseEntry {
 const isUntouched = (d: ExerciseDraft) =>
   d.sets.every((s) => !s.reps && !s.weight) && !d.distance && !d.minutes && !d.seconds
 
+export interface WorkoutFormHandle {
+  /** Replaces the form's exercises with a routine's (asks first if something has been entered). */
+  loadRoutine: (r: Routine) => void
+}
+
 interface Props {
   units: Units
   history: Workout[]
-  knownExercises: string[]
+  catalog: CatalogItem[]
+  routines: Routine[]
   /** When set, the form edits this workout instead of creating a new one. */
   editing?: Workout
   onSave: (w: Workout) => Promise<void>
+  onSaveRoutine: (input: RoutineInput) => Promise<boolean>
   onCancel?: () => void
+  ref?: Ref<WorkoutFormHandle>
 }
 
-export function WorkoutForm({ units, history, knownExercises, editing, onSave, onCancel }: Props) {
+export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, ref }: Props) {
   const listId = useId()
   const [date, setDate] = useState(editing?.date ?? todayLocal())
   const [notes, setNotes] = useState(editing?.notes ?? '')
@@ -100,6 +111,36 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
   )
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const [routineName, setRoutineName] = useState(editing?.routineName ?? '')
+  const [picking, setPicking] = useState(false)
+  const [savingRoutine, setSavingRoutine] = useState(false)
+  const day = weekdayOf(date)
+
+  /** A card for a routine/catalog exercise, filled in with last session's numbers when the type matches. */
+  const draftFor = (rx: RoutineExercise): ExerciseDraft => {
+    const last = lastEntryFor(history, rx.name)
+    if (last && kindOf(last) === rx.kind) return { ...entryToDraft(last, units), name: rx.name }
+    return { ...blankExercise(rx.kind), name: rx.name }
+  }
+
+  const loadRoutine = (r: Routine) => {
+    const dirty = exercises.some((x) => x.name.trim() || !isUntouched(x))
+    if (dirty && !confirm(`Replace the exercises you've entered with "${r.name}"?`)) return
+    setExercises(r.exercises.length ? r.exercises.map(draftFor) : [blankExercise()])
+    setRoutineName(r.name)
+    setErrors([])
+    setPicking(false)
+  }
+  useImperativeHandle(ref, () => ({ loadRoutine }))
+
+  /** Adds a picked exercise, replacing the starting card if it's still empty. */
+  const addFromCatalog = (item: CatalogItem) => {
+    const d = draftFor(item)
+    setExercises((xs) => (xs.length === 1 && !xs[0].name.trim() && isUntouched(xs[0]) ? [d] : [...xs, d]))
+  }
+
+  const namedExercises = (): RoutineExercise[] =>
+    dedupeExercises(exercises.map((x) => ({ name: x.name, kind: x.kind })))
 
   const updateExercise = (key: string, fn: (e: ExerciseDraft) => ExerciseDraft) =>
     setExercises((xs) => xs.map((x) => (x.key === key ? fn(x) : x)))
@@ -139,6 +180,7 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
       createdAt: editing?.createdAt ?? new Date().toISOString(),
       date,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
+      ...(routineName ? { routineName } : {}),
       exercises: exercises.map((d) => draftToEntry(d, units)),
     }
     const problems = validateWorkout(workout)
@@ -150,6 +192,9 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
       if (!editing) {
         setExercises([blankExercise()])
         setNotes('')
+        setRoutineName('')
+        setSavingRoutine(false)
+        setPicking(false)
       }
     } catch (err) {
       setErrors([`Could not save: ${(err as Error).message}`])
@@ -159,16 +204,50 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
   }
 
   return (
-    <form className="workout-form" onSubmit={submit} noValidate>
+    <form className="workout-form" onSubmit={submit} noValidate aria-label={editing ? 'Edit workout' : 'Log workout'}>
       <h2>{editing ? 'Edit workout' : 'Log workout'}</h2>
       <label className="field">
         Date
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
       </label>
 
+      {!editing && routines.length > 0 && (
+        <div className="routine-picker">
+          <span className="muted">Start from a routine</span>
+          <div className="chips">
+            {sortRoutines(routines, day).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={r.days.includes(day) ? 'chip today' : 'chip'}
+                onClick={() => loadRoutine(r)}
+              >
+                {r.name}
+                {r.days.includes(day) && (
+                  <>
+                    {' '}
+                    <span className="chip-tag">· Today</span>
+                  </>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {routineName && (
+        <p className="routine-badge">
+          <span>
+            Routine: <strong>{routineName}</strong>
+          </span>
+          <button type="button" className="icon-btn" aria-label="Unlink routine" onClick={() => setRoutineName('')}>
+            ✕
+          </button>
+        </p>
+      )}
+
       <datalist id={listId}>
-        {knownExercises.map((n) => (
-          <option key={n} value={n} />
+        {catalog.map((c) => (
+          <option key={c.name} value={c.name} />
         ))}
       </datalist>
 
@@ -307,9 +386,23 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
         )
       })}
 
-      <button type="button" className="secondary wide" onClick={() => setExercises((xs) => [...xs, blankExercise()])}>
-        + Add exercise
-      </button>
+      {picking ? (
+        <ExercisePicker
+          catalog={catalog}
+          selected={exercises.map((x) => x.name)}
+          onPick={addFromCatalog}
+          onClose={() => setPicking(false)}
+        />
+      ) : (
+        <div className="add-row">
+          <button type="button" className="secondary" onClick={() => setExercises((xs) => [...xs, blankExercise()])}>
+            + Add exercise
+          </button>
+          <button type="button" className="secondary" onClick={() => setPicking(true)}>
+            Pick from list
+          </button>
+        </div>
+      )}
 
       <label className="field">
         Notes (optional)
@@ -324,7 +417,29 @@ export function WorkoutForm({ units, history, knownExercises, editing, onSave, o
         </ul>
       )}
 
+      {savingRoutine && (
+        <SaveRoutinePanel
+          exercises={namedExercises()}
+          defaultName={routineName}
+          defaultDays={day >= 0 ? [day] : []}
+          onCancel={() => setSavingRoutine(false)}
+          onSave={async (input) => {
+            const saved = await onSaveRoutine(input)
+            if (saved) {
+              setSavingRoutine(false)
+              setRoutineName(input.name)
+            }
+            return saved
+          }}
+        />
+      )}
+
       <div className="actions">
+        {!editing && !savingRoutine && (
+          <button type="button" className="secondary push-left" onClick={() => setSavingRoutine(true)}>
+            Save as routine
+          </button>
+        )}
         {onCancel && (
           <button type="button" className="secondary" onClick={onCancel}>
             Cancel

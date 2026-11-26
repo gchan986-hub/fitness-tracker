@@ -88,3 +88,33 @@ button:disabled { opacity: 0.5; cursor: default; }
 .kind-toggle button[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 .cardio-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
 .pace { margin: 0.25rem 0 0; }
+.tabbar { grid-template-columns: repeat(5, 1fr); }
+.tabbar button { padding: 0.5rem 0.25rem; font-size: 0.85rem; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.section-head h2 { margin: 0; }
+.tag { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--grid); color: var(--muted); font-weight: 500; }
+.tag.today, .tag.added { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.routine-tag { margin-left: 0.5rem; vertical-align: middle; }
+.routine-picker { margin-bottom: 0.75rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.35rem; }
+.chip { border-radius: 999px; min-height: 40px; padding: 0.4rem 0.9rem; }
+.chip.today { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip-tag { font-weight: 400; }
+.routine-badge { display: flex; justify-content: space-between; align-items: center; margin: 0 0 0.75rem; padding: 0 0 0 0.75rem; border-left: 3px solid var(--accent); }
+.add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem; }
+.push-left { margin-right: auto; }
+.actions.start { justify-content: flex-start; margin-top: 0.5rem; }
+.picker-head { display: flex; gap: 0.5rem; }
+.picker-list { list-style: none; padding: 0; margin: 0.5rem 0 0; max-height: 300px; overflow-y: auto; }
+.picker-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; border: none; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; text-align: left; }
+.picker-list li:last-child button { border-bottom: none; }
+.days { border: none; padding: 0; margin: 0 0 0.75rem; min-width: 0; }
+.days legend { font-size: 0.9rem; color: var(--muted); padding: 0; margin-bottom: 0.3rem; }
+.day-buttons { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; }
+.day-buttons button { padding: 0.25rem 0; font-size: 0.8rem; min-height: 40px; }
+.day-buttons button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.save-routine h3 { margin-top: 0; }
+.routine-exercises { list-style: none; padding: 0; margin: 0 0 0.75rem; }
+.routine-exercises li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 0.85rem; margin-bottom: 0.4rem; }
+.row-actions { display: flex; flex-shrink: 0; }
+.row-actions .icon-btn { min-width: 40px; }

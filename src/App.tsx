@@ -1,16 +1,20 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { History } from './components/History'
+import { Routines } from './components/Routines'
 import { Settings } from './components/Settings'
-import { WorkoutForm } from './components/WorkoutForm'
-import { deleteWorkout, listWorkouts, saveWorkout } from './lib/db'
+import { WorkoutForm, type WorkoutFormHandle } from './components/WorkoutForm'
+import { deleteRoutine, deleteWorkout, listRoutines, listWorkouts, saveRoutine, saveWorkout } from './lib/db'
+import { newId } from './lib/id'
+import { findRoutineByName, fullCatalog } from './lib/routines'
 import { exerciseCatalog } from './lib/stats'
-import type { Units, Workout } from './lib/types'
+import type { Routine, RoutineInput, Units, Workout } from './lib/types'
 
-type Tab = 'log' | 'history' | 'progress' | 'settings'
+type Tab = 'log' | 'history' | 'progress' | 'routines' | 'settings'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'log', label: 'Log' },
   { id: 'history', label: 'History' },
   { id: 'progress', label: 'Progress' },
+  { id: 'routines', label: 'Routines' },
   { id: 'settings', label: 'Settings' },
 ]
 const Progress = lazy(() => import('./components/Progress').then((m) => ({ default: m.Progress })))
@@ -28,29 +32,37 @@ function readUnits(): Units {
   }
 }
 
+const loadAll = () => Promise.all([listWorkouts(), listRoutines()])
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('log')
   const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [routines, setRoutines] = useState<Routine[]>([])
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Workout>()
   const [units, setUnits] = useState<Units>(readUnits)
   const [toast, setToast] = useState('')
+  const formRef = useRef<WorkoutFormHandle>(null)
 
   const reload = useCallback(async () => {
     try {
-      setWorkouts(await listWorkouts())
+      const [ws, rs] = await loadAll()
+      setWorkouts(ws)
+      setRoutines(rs)
     } catch (err) {
       setLoadError(`Could not open local storage: ${(err as Error).message}`)
-    } finally {
-      setLoaded(true)
     }
   }, [])
 
   useEffect(() => {
     let active = true
-    listWorkouts()
-      .then((ws) => active && setWorkouts(ws))
+    loadAll()
+      .then(([ws, rs]) => {
+        if (!active) return
+        setWorkouts(ws)
+        setRoutines(rs)
+      })
       .catch((err: Error) => active && setLoadError(`Could not open local storage: ${err.message}`))
       .finally(() => active && setLoaded(true))
     return () => {
@@ -64,8 +76,8 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  const catalog = useMemo(() => exerciseCatalog(workouts), [workouts])
-  const names = useMemo(() => catalog.map((c) => c.name), [catalog])
+  const logged = useMemo(() => exerciseCatalog(workouts), [workouts])
+  const catalog = useMemo(() => fullCatalog(workouts, routines), [workouts, routines])
 
   const changeUnits = (u: Units) => {
     setUnits(u)
@@ -77,14 +89,40 @@ export default function App() {
     }
   }
 
-  const save = async (w: Workout) => {
+  const goTo = (t: Tab) => {
+    if (t !== 'log') setEditing(undefined)
+    setTab(t)
+  }
+
+  const saveNew = async (w: Workout) => {
     await saveWorkout(w)
     await reload()
-    setToast(editing ? 'Workout updated' : 'Workout saved')
-    if (editing) {
-      setEditing(undefined)
-      setTab('history')
-    }
+    setToast('Workout saved')
+  }
+
+  const saveEdit = async (w: Workout) => {
+    await saveWorkout(w)
+    await reload()
+    setToast('Workout updated')
+    setEditing(undefined)
+    setTab('history')
+  }
+
+  /**
+   * Creates or updates a routine. Saving under the name of another routine replaces that one (after asking).
+   * `id` is the routine being edited, if any. Resolves false if the user backs out.
+   */
+  const saveRoutineInput = async (input: RoutineInput, id?: string): Promise<boolean> => {
+    const clash = findRoutineByName(routines, input.name)
+    if (clash && clash.id !== id && !confirm(`Replace your existing routine "${clash.name}"?`)) return false
+    const targetId = id ?? clash?.id ?? newId()
+    if (id && clash && clash.id !== id) await deleteRoutine(clash.id)
+    const existing = routines.find((r) => r.id === targetId)
+    const now = new Date().toISOString()
+    await saveRoutine({ ...input, id: targetId, createdAt: existing?.createdAt ?? now, updatedAt: now })
+    await reload()
+    setToast('Routine saved')
+    return true
   }
 
   return (
@@ -93,46 +131,82 @@ export default function App() {
         <h1>Fitness Tracker</h1>
       </header>
       <main>
-        {loadError && <p className="errors" role="alert">{loadError}</p>}
+        {loadError && (
+          <p className="errors" role="alert">
+            {loadError}
+          </p>
+        )}
         {!loaded ? (
           <p className="muted">Loading…</p>
-        ) : tab === 'log' ? (
-          <WorkoutForm
-            key={editing?.id ?? 'new'}
-            units={units}
-            history={workouts}
-            knownExercises={names}
-            editing={editing}
-            onSave={save}
-            onCancel={
-              editing
-                ? () => {
-                    setEditing(undefined)
-                    setTab('history')
-                  }
-                : undefined
-            }
-          />
-        ) : tab === 'history' ? (
-          <History
-            workouts={workouts}
-            units={units}
-            onEdit={(w) => {
-              setEditing(w)
-              setTab('log')
-            }}
-            onDelete={async (w) => {
-              await deleteWorkout(w.id)
-              await reload()
-              setToast('Workout deleted')
-            }}
-          />
-        ) : tab === 'progress' ? (
-          <Suspense fallback={<p className="muted">Loading chart…</p>}>
-            <Progress workouts={workouts} catalog={catalog} units={units} />
-          </Suspense>
         ) : (
-          <Settings units={units} onUnitsChange={changeUnits} onImported={reload} />
+          <>
+            {/* The new-workout form stays mounted so an in-progress session survives switching tabs. */}
+            <div hidden={tab !== 'log' || !!editing}>
+              <WorkoutForm
+                ref={formRef}
+                units={units}
+                history={workouts}
+                catalog={catalog}
+                routines={routines}
+                onSave={saveNew}
+                onSaveRoutine={saveRoutineInput}
+              />
+            </div>
+            {tab === 'log' && editing && (
+              <WorkoutForm
+                key={editing.id}
+                units={units}
+                history={workouts}
+                catalog={catalog}
+                routines={routines}
+                editing={editing}
+                onSave={saveEdit}
+                onSaveRoutine={saveRoutineInput}
+                onCancel={() => {
+                  setEditing(undefined)
+                  setTab('history')
+                }}
+              />
+            )}
+            {tab === 'history' && (
+              <History
+                workouts={workouts}
+                units={units}
+                onEdit={(w) => {
+                  setEditing(w)
+                  setTab('log')
+                }}
+                onDelete={async (w) => {
+                  await deleteWorkout(w.id)
+                  await reload()
+                  setToast('Workout deleted')
+                }}
+                onSaveRoutine={saveRoutineInput}
+              />
+            )}
+            {tab === 'progress' && (
+              <Suspense fallback={<p className="muted">Loading chart…</p>}>
+                <Progress workouts={workouts} catalog={logged} units={units} />
+              </Suspense>
+            )}
+            {tab === 'routines' && (
+              <Routines
+                routines={routines}
+                catalog={catalog}
+                onSave={saveRoutineInput}
+                onStart={(r) => {
+                  goTo('log')
+                  formRef.current?.loadRoutine(r)
+                }}
+                onDelete={async (r) => {
+                  await deleteRoutine(r.id)
+                  await reload()
+                  setToast('Routine deleted')
+                }}
+              />
+            )}
+            {tab === 'settings' && <Settings units={units} onUnitsChange={changeUnits} onImported={reload} />}
+          </>
         )}
       </main>
       {toast && (
@@ -142,15 +216,7 @@ export default function App() {
       )}
       <nav className="tabbar" aria-label="Sections">
         {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            aria-current={tab === t.id ? 'page' : undefined}
-            onClick={() => {
-              if (t.id !== 'log') setEditing(undefined)
-              setTab(t.id)
-            }}
-          >
+          <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => goTo(t.id)}>
             {t.label}
           </button>
         ))}

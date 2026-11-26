@@ -31,7 +31,27 @@ export interface Workout {
   exercises: ExerciseEntry[]
   /** ISO timestamp of when the record was created. */
   createdAt: string
+  /** Name of the routine this workout was started from, if any. */
+  routineName?: string
 }
+
+export interface RoutineExercise {
+  name: string
+  kind: ExerciseKind
+}
+
+/** A saved group of exercises (no numbers: loading one fills in last session's numbers). */
+export interface Routine {
+  id: string
+  name: string
+  /** Weekdays it's planned for, as Date.getDay() values (0 = Sunday). Empty = any day. */
+  days: number[]
+  exercises: RoutineExercise[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type RoutineInput = Pick<Routine, 'name' | 'days' | 'exercises'>
 
 export type WeightUnit = 'kg' | 'lb'
 export type DistanceUnit = 'km' | 'mi'

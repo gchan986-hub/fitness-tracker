@@ -51,6 +51,7 @@ export function isWorkout(value: unknown): value is Workout {
     typeof value.date === 'string' &&
     typeof value.createdAt === 'string' &&
     (value.notes === undefined || typeof value.notes === 'string') &&
+    (value.routineName === undefined || typeof value.routineName === 'string') &&
     Array.isArray(value.exercises) &&
     value.exercises.every(isEntry)
   )
