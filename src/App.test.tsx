@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { _resetForTests, listRoutines, saveRoutine, saveWorkout } from './lib/db'
+import { _resetForTests, getProfile, listBodyWeights, listRoutines, saveBodyWeight, saveProfile, saveRoutine, saveWorkout } from './lib/db'
 import { cardio, sets, workout } from './test/fixtures'
 
 beforeEach(async () => {
@@ -695,5 +695,87 @@ describe('App', () => {
     await user.click(tab('Log'))
     expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Squat')
     expect(JSON.parse(localStorage.getItem('fitness-tracker:draft')!).exercises[0].name).toBe('Squat')
+  })
+
+  describe('profile', () => {
+    it('welcomes a new user and sets up a profile with height and body weight', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Set up profile' }))
+      await user.click(screen.getByRole('button', { name: 'Save profile' }))
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a name.')
+
+      await user.type(screen.getByLabelText('Name'), 'Sam')
+      await user.type(screen.getByLabelText('Height (cm)'), '175')
+      await user.type(screen.getByLabelText('Birth year (optional)'), '2008')
+      await user.click(screen.getByRole('button', { name: 'Save profile' }))
+      expect(await screen.findByText('Profile saved')).toBeInTheDocument()
+      expect(await getProfile()).toMatchObject({ name: 'Sam', heightCm: 175, birthYear: 2008 })
+      expect(screen.getByRole('button', { name: 'Profile' })).toHaveTextContent('Sam')
+
+      await user.type(screen.getByLabelText('Weight (kg)'), '70.5')
+      await user.click(screen.getByRole('button', { name: 'Log weight' }))
+      expect(await screen.findByText('Weight logged')).toBeInTheDocument()
+      expect(screen.getByText('70.5 kg', { selector: 'strong' })).toBeInTheDocument()
+
+      await user.click(tab('Log'))
+      expect(screen.queryByRole('button', { name: 'Set up profile' })).not.toBeInTheDocument()
+    })
+
+    it('uses feet and inches with pounds, and keeps the profile across restarts', async () => {
+      localStorage.setItem('fitness-tracker:unit', 'lb')
+      const user = userEvent.setup()
+      const first = render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.type(screen.getByLabelText('Name'), 'Dad')
+      await user.type(screen.getByLabelText('Height feet'), '5')
+      await user.type(screen.getByLabelText('Height inches'), '10')
+      await user.click(screen.getByRole('button', { name: 'Save profile' }))
+      expect(await screen.findByText('Profile saved')).toBeInTheDocument()
+      expect((await getProfile())?.heightCm).toBeCloseTo(177.8, 5)
+      await user.type(screen.getByLabelText('Weight (lb)'), '180')
+      await user.click(screen.getByRole('button', { name: 'Log weight' }))
+      expect((await listBodyWeights())[0].weightKg).toBeCloseTo(81.65, 2)
+      first.unmount()
+
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      expect(screen.getByLabelText('Name')).toHaveValue('Dad')
+      expect(screen.getByLabelText('Height feet')).toHaveValue('5')
+      expect(screen.getByLabelText('Height inches')).toHaveValue('10')
+      expect(screen.getByText('180 lb', { selector: 'strong' })).toBeInTheDocument()
+    })
+
+    it('charts body weight in Progress', async () => {
+      await saveProfile({ name: 'Sam', updatedAt: 'x' })
+      await saveBodyWeight({ date: '2026-01-01', weightKg: 72 })
+      await saveBodyWeight({ date: '2026-01-15', weightKg: 70.5 })
+      await saveBodyWeight({ date: '2026-02-01', weightKg: 71 })
+      const user = userEvent.setup()
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Progress' }))
+      expect(await screen.findByRole('heading', { name: 'Summary' })).toBeInTheDocument()
+      expect(screen.getByText('−1 kg')).toBeInTheDocument()
+      expect(screen.getByText('70.5 kg')).toBeInTheDocument()
+    })
+
+    it('deletes a weigh-in, and the whole profile from Delete data', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      await saveProfile({ name: 'Sam', updatedAt: 'x' })
+      await saveBodyWeight({ date: '2026-01-01', weightKg: 72 })
+      await saveBodyWeight({ date: '2026-01-15', weightKg: 70.5 })
+      await saveWorkout(workout('2026-01-01', [{ name: 'Row', sets: sets([10, 50]) }]))
+      const user = userEvent.setup()
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.click(screen.getByRole('button', { name: /Delete weigh-in on .*Jan 15, 2026/ }))
+      expect(await screen.findByText('72 kg', { selector: 'strong' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Delete profile & weigh-ins' }))
+      expect(await screen.findByText('Deleted profile and weigh-ins.')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('')
+      expect(await listBodyWeights()).toEqual([])
+      expect(screen.getByRole('button', { name: 'Delete all workouts (1)' })).toBeInTheDocument()
+    })
   })
 })

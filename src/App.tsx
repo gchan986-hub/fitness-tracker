@@ -4,7 +4,19 @@ import { RestTimer } from './components/RestTimer'
 import { Routines } from './components/Routines'
 import { Settings } from './components/Settings'
 import { WorkoutForm, type WorkoutFormHandle } from './components/WorkoutForm'
-import { deleteRoutine, deleteWorkout, listRoutines, listWorkouts, saveRoutine, saveWorkout } from './lib/db'
+import {
+  deleteBodyWeight,
+  deleteRoutine,
+  deleteWorkout,
+  getProfile,
+  listBodyWeights,
+  listRoutines,
+  listWorkouts,
+  saveBodyWeight,
+  saveProfile,
+  saveRoutine,
+  saveWorkout,
+} from './lib/db'
 import { newId } from './lib/id'
 import {
   readRestSec,
@@ -18,7 +30,7 @@ import {
 } from './lib/rest'
 import { findRoutineByName, fullCatalog } from './lib/routines'
 import { exerciseCatalog } from './lib/stats'
-import type { Routine, RoutineInput, Units, Workout } from './lib/types'
+import type { BodyWeight, Profile, Routine, RoutineInput, Units, Workout } from './lib/types'
 
 type Tab = 'log' | 'history' | 'progress' | 'routines' | 'settings'
 const TABS: { id: Tab; label: string }[] = [
@@ -43,12 +55,14 @@ function readUnits(): Units {
   }
 }
 
-const loadAll = () => Promise.all([listWorkouts(), listRoutines()])
+const loadAll = () => Promise.all([listWorkouts(), listRoutines(), getProfile(), listBodyWeights()])
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('log')
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
+  const [profile, setProfile] = useState<Profile>()
+  const [bodyWeights, setBodyWeights] = useState<BodyWeight[]>([])
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Workout>()
@@ -61,9 +75,11 @@ export default function App() {
 
   const reload = useCallback(async () => {
     try {
-      const [ws, rs] = await loadAll()
+      const [ws, rs, p, bw] = await loadAll()
       setWorkouts(ws)
       setRoutines(rs)
+      setProfile(p)
+      setBodyWeights(bw)
     } catch (err) {
       setLoadError(`Could not open local storage: ${(err as Error).message}`)
     }
@@ -72,10 +88,12 @@ export default function App() {
   useEffect(() => {
     let active = true
     loadAll()
-      .then(([ws, rs]) => {
+      .then(([ws, rs, p, bw]) => {
         if (!active) return
         setWorkouts(ws)
         setRoutines(rs)
+        setProfile(p)
+        setBodyWeights(bw)
       })
       .catch((err: Error) => active && setLoadError(`Could not open local storage: ${err.message}`))
       .finally(() => active && setLoaded(true))
@@ -158,6 +176,11 @@ export default function App() {
     <div className={rest ? 'app resting' : 'app'}>
       <header className="topbar">
         <h1>Fitness Tracker</h1>
+        {profile && (
+          <button type="button" className="profile-chip" onClick={() => goTo('settings')} aria-label="Profile">
+            {profile.name}
+          </button>
+        )}
       </header>
       <main>
         {loadError && (
@@ -169,6 +192,17 @@ export default function App() {
           <p className="muted">Loading…</p>
         ) : (
           <>
+            {!profile && tab === 'log' && !editing && (
+              <div className="card welcome">
+                <strong>Welcome!</strong>
+                <p className="muted">
+                  Set up your profile (name, height and body weight). Everything you log on this phone is kept with it.
+                </p>
+                <button type="button" className="primary" onClick={() => goTo('settings')}>
+                  Set up profile
+                </button>
+              </div>
+            )}
             {/* The new-workout form stays mounted so an in-progress session survives switching tabs. */}
             <div hidden={tab !== 'log' || !!editing}>
               <WorkoutForm
@@ -217,7 +251,7 @@ export default function App() {
             )}
             {tab === 'progress' && (
               <Suspense fallback={<p className="muted">Loading chart…</p>}>
-                <Progress workouts={workouts} catalog={logged} units={units} />
+                <Progress workouts={workouts} catalog={logged} units={units} bodyWeights={bodyWeights} />
               </Suspense>
             )}
             {tab === 'routines' && (
@@ -243,6 +277,22 @@ export default function App() {
                 onImported={reload}
                 workoutCount={workouts.length}
                 routineCount={routines.length}
+                profile={profile}
+                bodyWeights={bodyWeights}
+                onSaveProfile={async (p) => {
+                  await saveProfile(p)
+                  await reload()
+                  setToast('Profile saved')
+                }}
+                onAddWeight={async (b) => {
+                  await saveBodyWeight(b)
+                  await reload()
+                  setToast('Weight logged')
+                }}
+                onDeleteWeight={async (b) => {
+                  await deleteBodyWeight(b.date)
+                  await reload()
+                }}
                 restSec={restSec}
                 onRestSecChange={(sec) => {
                   setRestSec(sec)

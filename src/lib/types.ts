@@ -77,3 +77,17 @@ export interface Units {
   weight: WeightUnit
   distance: DistanceUnit
 }
+
+/** Who this device's app belongs to. There is one profile per device. */
+export interface Profile {
+  name: string
+  heightCm?: number
+  birthYear?: number
+  updatedAt: string
+}
+
+/** One weigh-in per day; `date` (YYYY-MM-DD) is also the id. */
+export interface BodyWeight {
+  date: string
+  weightKg: number
+}

@@ -3,7 +3,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { formatDate } from '../lib/id'
 import { exerciseLabel } from '../lib/equipment'
 import { cardioProgressFor, cardioRecords, catalogKey, personalRecords, progressFor, type CatalogItem } from '../lib/stats'
-import type { Equipment, Units, Workout } from '../lib/types'
+import { sortWeighIns } from '../lib/profile'
+import type { BodyWeight, Equipment, Units, Workout } from '../lib/types'
 import { formatDistance, formatDuration, formatPace, formatWeight, fromKg, fromKm, paceInUnit } from '../lib/units'
 
 interface Row {
@@ -118,25 +119,58 @@ function cardioView(workouts: Workout[], name: string, units: Units): { metrics:
   }
 }
 
+function bodyWeightView(weighIns: BodyWeight[], units: Units): { metrics: Metric[]; records: RecordItem[] } {
+  const list = sortWeighIns(weighIns)
+  const w = units.weight
+  const first = list[0]
+  const last = list[list.length - 1]
+  const lowest = list.reduce((a, b) => (b.weightKg < a.weightKg ? b : a), first)
+  const change = last.weightKg - first.weightKg
+  const changeText = `${change > 0 ? '+' : change < 0 ? '−' : '±'}${formatWeight(Math.abs(change), w)}`
+  return {
+    metrics: [
+      {
+        id: 'bodyweight',
+        label: 'Body weight',
+        rows: list.map((b) => ({ date: b.date, value: r(fromKg(b.weightKg, w), 1) })),
+        fmt: (v) => `${v} ${w}`,
+      },
+    ],
+    records: [
+      { label: 'Latest', value: formatWeight(last.weightKg, w), detail: formatDate(last.date) },
+      { label: 'Change', value: changeText, detail: `since ${formatDate(first.date)}` },
+      { label: 'Lowest', value: formatWeight(lowest.weightKg, w), detail: formatDate(lowest.date) },
+    ],
+  }
+}
+
+/** Select value for the body weight chart (can't clash with an exercise key, which always contains "|"). */
+const BODY_WEIGHT = 'body-weight'
+
 interface Props {
   workouts: Workout[]
   catalog: CatalogItem[]
   units: Units
+  bodyWeights?: BodyWeight[]
 }
 
-export function Progress({ workouts, catalog, units }: Props) {
+export function Progress({ workouts, catalog, units, bodyWeights = [] }: Props) {
   const [picked, setPicked] = useState('')
   const [metricId, setMetricId] = useState('')
 
-  if (catalog.length === 0) {
+  const hasWeight = bodyWeights.length > 0
+  if (catalog.length === 0 && !hasWeight) {
     return <p className="empty">Log a workout to see progress charts here.</p>
   }
-  const item = catalog.find((c) => catalogKey(c) === picked) ?? catalog[0]
-  const label = exerciseLabel(item.name, item.equipment)
-  const view =
-    item.kind === 'cardio'
-      ? cardioView(workouts, item.name, units)
-      : strengthView(workouts, item.name, item.equipment, units)
+  const item = catalog.find((c) => catalogKey(c) === picked)
+  const showWeight = hasWeight && (picked === BODY_WEIGHT || (!item && catalog.length === 0))
+  const current = showWeight ? undefined : (item ?? catalog[0])
+  const label = current ? exerciseLabel(current.name, current.equipment) : 'Body weight'
+  const view = !current
+    ? bodyWeightView(bodyWeights, units)
+    : current.kind === 'cardio'
+      ? cardioView(workouts, current.name, units)
+      : strengthView(workouts, current.name, current.equipment, units)
   const metric = view.metrics.find((m) => m.id === metricId) ?? view.metrics[0]
   const data = metric.rows
 
@@ -146,7 +180,8 @@ export function Progress({ workouts, catalog, units }: Props) {
       <div className="controls">
         <label className="field">
           Exercise
-          <select value={catalogKey(item)} onChange={(e) => setPicked(e.target.value)}>
+          <select value={current ? catalogKey(current) : BODY_WEIGHT} onChange={(e) => setPicked(e.target.value)}>
+            {hasWeight && <option value={BODY_WEIGHT}>Body weight</option>}
             {catalog.map((c) => (
               <option key={catalogKey(c)} value={catalogKey(c)}>
                 {exerciseLabel(c.name, c.equipment)}
@@ -169,7 +204,7 @@ export function Progress({ workouts, catalog, units }: Props) {
       <div className="card chart" aria-label={`${label} progress chart`}>
         {data.length < 2 ? (
           <p className="muted">
-            Log {label}
+            {current ? `Log ${label}` : 'Log your weight'}
             {metric.id === 'distance' || metric.id === 'pace' ? ' with a distance' : ''} on at least two different days
             to see a trend.
           </p>
@@ -202,7 +237,7 @@ export function Progress({ workouts, catalog, units }: Props) {
         )}
       </div>
 
-      <h3>Personal records</h3>
+      <h3>{current ? 'Personal records' : 'Summary'}</h3>
       <dl className="prs">
         {view.records.map((rec) => (
           <div className="card" key={rec.label}>

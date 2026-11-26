@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
-import { clearRoutines, clearWorkouts, exportBackup, importBackup } from '../lib/db'
+import { clearProfile, clearRoutines, clearWorkouts, exportBackup, importBackup } from '../lib/db'
 import { todayLocal } from '../lib/id'
 import { REST_OPTIONS } from '../lib/rest'
 import { formatDuration } from '../lib/units'
-import type { Units } from '../lib/types'
+import type { BodyWeight, Profile, Units } from '../lib/types'
+import { ProfileCard } from './ProfileCard'
 
 interface Props {
   units: Units
@@ -16,6 +17,11 @@ interface Props {
   onRestSecChange: (sec: number) => void
   restSound: boolean
   onRestSoundChange: (on: boolean) => void
+  profile?: Profile
+  bodyWeights: BodyWeight[]
+  onSaveProfile: (p: Profile) => Promise<void>
+  onAddWeight: (b: BodyWeight) => Promise<void>
+  onDeleteWeight: (b: BodyWeight) => Promise<void>
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -30,6 +36,11 @@ export function Settings({
   onRestSecChange,
   restSound,
   onRestSoundChange,
+  profile,
+  bodyWeights,
+  onSaveProfile,
+  onAddWeight,
+  onDeleteWeight,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
@@ -41,6 +52,13 @@ export function Settings({
     if (!confirm(`Delete all ${count}? ${keep} This can't be undone.`)) return
     await (what === 'workouts' ? clearWorkouts() : clearRoutines())
     setDeleteMessage(`Deleted ${count}.`)
+    onImported()
+  }
+
+  const deleteProfile = async () => {
+    if (!confirm("Delete your profile and all weigh-ins? Workouts and routines are kept. This can't be undone.")) return
+    await clearProfile()
+    setDeleteMessage('Deleted profile and weigh-ins.')
     onImported()
   }
 
@@ -56,10 +74,12 @@ export function Settings({
 
   const upload = async (file: File) => {
     try {
-      const { workouts, routines } = await importBackup(JSON.parse(await file.text()))
-      setMessage(
-        `Imported ${plural(workouts, 'workout')}${routines ? ` and ${plural(routines, 'routine')}` : ''}.`,
-      )
+      const r = await importBackup(JSON.parse(await file.text()))
+      const parts = [plural(r.workouts, 'workout')]
+      if (r.routines) parts.push(plural(r.routines, 'routine'))
+      if (r.bodyWeights) parts.push(plural(r.bodyWeights, 'weigh-in'))
+      if (r.profile) parts.push('your profile')
+      setMessage(`Imported ${parts.join(', ')}.`)
       onImported()
     } catch (err) {
       setMessage(err instanceof SyntaxError ? 'That file is not valid JSON.' : (err as Error).message)
@@ -69,6 +89,15 @@ export function Settings({
   return (
     <section>
       <h2>Settings</h2>
+      <ProfileCard
+        key={`${profile?.updatedAt ?? 'none'}-${units.weight}`}
+        profile={profile}
+        bodyWeights={bodyWeights}
+        units={units}
+        onSaveProfile={onSaveProfile}
+        onAddWeight={onAddWeight}
+        onDeleteWeight={onDeleteWeight}
+      />
       <fieldset className="card">
         <legend>Weight unit</legend>
         {(['kg', 'lb'] as const).map((u) => (
@@ -121,7 +150,7 @@ export function Settings({
       <div className="card">
         <h3>Backup</h3>
         <p className="muted">
-          Your workouts are stored only in this browser on this device. Download a backup now and then, and use it to
+          Your profile and workouts are stored only in this app on this device. Download a backup now and then, and use it to
           move your data to another device.
         </p>
         <div className="actions">
@@ -168,6 +197,14 @@ export function Settings({
             onClick={() => void deleteAll('routines')}
           >
             Delete all routines ({routineCount})
+          </button>
+          <button
+            type="button"
+            className="danger"
+            disabled={!profile && bodyWeights.length === 0}
+            onClick={() => void deleteProfile()}
+          >
+            Delete profile &amp; weigh-ins
           </button>
         </div>
         {deleteMessage && <p role="status">{deleteMessage}</p>}
