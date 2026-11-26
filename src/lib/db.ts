@@ -45,6 +45,16 @@ export async function deleteWorkout(id: string): Promise<void> {
   await (await db()).delete('workouts', id)
 }
 
+/** Deletes every logged workout (routines are kept). */
+export async function clearWorkouts(): Promise<void> {
+  await (await db()).clear('workouts')
+}
+
+/** Deletes every routine (logged workouts are kept). */
+export async function clearRoutines(): Promise<void> {
+  await (await db()).clear('routines')
+}
+
 export async function listRoutines(): Promise<Routine[]> {
   return (await db()).getAll('routines')
 }

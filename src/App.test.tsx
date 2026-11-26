@@ -439,4 +439,32 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(screen.getByLabelText('Exercise 1 equipment')).toHaveValue('band')
   })
+
+  it('deletes all workouts or all routines from Settings after confirming', async () => {
+    await saveWorkout(workout('2026-01-01', [{ name: 'Row', sets: sets([10, 50]) }]))
+    await saveWorkout(workout('2026-01-02', [cardio('Run', 1500, 5)]))
+    await saveRoutine({ id: 'r1', name: 'Pull', days: [], exercises: [{ name: 'Row', kind: 'strength' }], createdAt: 'x', updatedAt: 'x' })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true)
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Settings' }))
+
+    // Cancelling keeps everything
+    await user.click(screen.getByRole('button', { name: 'Delete all workouts (2)' }))
+    expect(confirmSpy).toHaveBeenLastCalledWith("Delete all 2 workouts? Your routines are kept. This can't be undone.")
+    expect(screen.getByRole('button', { name: 'Delete all workouts (2)' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete all workouts (2)' }))
+    expect(await screen.findByRole('button', { name: 'Delete all workouts (0)' })).toBeDisabled()
+    expect(screen.getByText('Deleted 2 workouts.')).toBeInTheDocument()
+    await user.click(tab('History'))
+    expect(await screen.findByText(/No workouts yet/)).toBeInTheDocument()
+    await user.click(tab('Routines'))
+    expect(screen.getByRole('heading', { name: 'Pull' })).toBeInTheDocument()
+
+    await user.click(tab('Settings'))
+    await user.click(screen.getByRole('button', { name: 'Delete all routines (1)' }))
+    expect(await screen.findByRole('button', { name: 'Delete all routines (0)' })).toBeDisabled()
+    expect(await listRoutines()).toEqual([])
+  })
 })

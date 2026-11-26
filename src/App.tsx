@@ -205,7 +205,15 @@ export default function App() {
                 }}
               />
             )}
-            {tab === 'settings' && <Settings units={units} onUnitsChange={changeUnits} onImported={reload} />}
+            {tab === 'settings' && (
+              <Settings
+                units={units}
+                onUnitsChange={changeUnits}
+                onImported={reload}
+                workoutCount={workouts.length}
+                routineCount={routines.length}
+              />
+            )}
           </>
         )}
       </main>
