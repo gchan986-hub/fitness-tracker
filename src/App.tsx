@@ -3,8 +3,8 @@ import { History } from './components/History'
 import { Settings } from './components/Settings'
 import { WorkoutForm } from './components/WorkoutForm'
 import { deleteWorkout, listWorkouts, saveWorkout } from './lib/db'
-import { exerciseNames } from './lib/stats'
-import type { WeightUnit, Workout } from './lib/types'
+import { exerciseCatalog } from './lib/stats'
+import type { Units, Workout } from './lib/types'
 
 type Tab = 'log' | 'history' | 'progress' | 'settings'
 const TABS: { id: Tab; label: string }[] = [
@@ -14,13 +14,17 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ]
 const Progress = lazy(() => import('./components/Progress').then((m) => ({ default: m.Progress })))
-const UNIT_KEY = 'fitness-tracker:unit'
+const WEIGHT_UNIT_KEY = 'fitness-tracker:unit'
+const DISTANCE_UNIT_KEY = 'fitness-tracker:distance-unit'
 
-function readUnit(): WeightUnit {
+function readUnits(): Units {
   try {
-    return localStorage.getItem(UNIT_KEY) === 'lb' ? 'lb' : 'kg'
+    return {
+      weight: localStorage.getItem(WEIGHT_UNIT_KEY) === 'lb' ? 'lb' : 'kg',
+      distance: localStorage.getItem(DISTANCE_UNIT_KEY) === 'mi' ? 'mi' : 'km',
+    }
   } catch {
-    return 'kg'
+    return { weight: 'kg', distance: 'km' }
   }
 }
 
@@ -30,7 +34,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Workout>()
-  const [unit, setUnit] = useState<WeightUnit>(readUnit)
+  const [units, setUnits] = useState<Units>(readUnits)
   const [toast, setToast] = useState('')
 
   const reload = useCallback(async () => {
@@ -60,12 +64,14 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  const names = useMemo(() => exerciseNames(workouts), [workouts])
+  const catalog = useMemo(() => exerciseCatalog(workouts), [workouts])
+  const names = useMemo(() => catalog.map((c) => c.name), [catalog])
 
-  const changeUnit = (u: WeightUnit) => {
-    setUnit(u)
+  const changeUnits = (u: Units) => {
+    setUnits(u)
     try {
-      localStorage.setItem(UNIT_KEY, u)
+      localStorage.setItem(WEIGHT_UNIT_KEY, u.weight)
+      localStorage.setItem(DISTANCE_UNIT_KEY, u.distance)
     } catch {
       /* preference just won't persist */
     }
@@ -93,7 +99,7 @@ export default function App() {
         ) : tab === 'log' ? (
           <WorkoutForm
             key={editing?.id ?? 'new'}
-            unit={unit}
+            units={units}
             history={workouts}
             knownExercises={names}
             editing={editing}
@@ -110,7 +116,7 @@ export default function App() {
         ) : tab === 'history' ? (
           <History
             workouts={workouts}
-            unit={unit}
+            units={units}
             onEdit={(w) => {
               setEditing(w)
               setTab('log')
@@ -123,10 +129,10 @@ export default function App() {
           />
         ) : tab === 'progress' ? (
           <Suspense fallback={<p className="muted">Loading chart…</p>}>
-            <Progress workouts={workouts} exercises={names} unit={unit} />
+            <Progress workouts={workouts} catalog={catalog} units={units} />
           </Suspense>
         ) : (
-          <Settings unit={unit} onUnitChange={changeUnit} onImported={reload} />
+          <Settings units={units} onUnitsChange={changeUnits} onImported={reload} />
         )}
       </main>
       {toast && (

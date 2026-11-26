@@ -2,10 +2,10 @@
 
 A mobile-friendly workout log you can install on your phone's home screen (PWA).
 
-- **Log** workouts: exercises with sets, reps and weight. Picking an exercise you've done before pre-fills last session's sets; “Add set” copies the previous set.
-- **History** of every workout, newest first, with total volume. Edit or delete any entry.
-- **Progress** chart per exercise (estimated 1-rep max, heaviest set, or volume) plus personal records.
-- **Settings**: kg or lb, and backup export/import as JSON.
+- **Log** workouts mixing **weights** (sets, reps, weight) and **cardio** (distance, time, live pace). Each exercise has a Weights/Cardio switch; distance is optional for things like classes. Picking an exercise you've done before switches to its type and pre-fills last session's numbers; “Add set” copies the previous set.
+- **History** of every workout, newest first, with total weights volume and cardio distance. Edit or delete any entry.
+- **Progress** chart per exercise. Weights: estimated 1-rep max, heaviest set or volume. Cardio: distance, pace or time. Plus personal records for each.
+- **Settings**: kg or lb, km or mi, and backup export/import as JSON.
 
 Data stays on your device in the browser (IndexedDB). There are no accounts and no server. Use **Settings → Download backup** regularly. Clearing the browser's site data deletes your workouts.
 
@@ -40,7 +40,7 @@ src/
   App.tsx       tabs and app state
 ```
 
-Weights are always stored in kilograms and converted for display. Estimated 1RM uses the Epley formula: `weight × (1 + reps / 30)`.
+Weights are always stored in kilograms and distances in kilometres, converted for display. Workouts saved before cardio was added still load unchanged. Estimated 1RM uses the Epley formula: `weight × (1 + reps / 30)`.
 
 ## Deploy
 
@@ -48,7 +48,6 @@ Weights are always stored in kilograms and converted for display. Estimated 1RM 
 
 ## Roadmap
 
-- Cardio (distance / time / pace)
 - Saved routines and a rest timer
 - Weekly summary and streaks
 

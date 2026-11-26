@@ -1,15 +1,15 @@
 import { useRef, useState } from 'react'
 import { exportBackup, importBackup } from '../lib/db'
 import { todayLocal } from '../lib/id'
-import type { WeightUnit } from '../lib/types'
+import type { Units } from '../lib/types'
 
 interface Props {
-  unit: WeightUnit
-  onUnitChange: (u: WeightUnit) => void
+  units: Units
+  onUnitsChange: (u: Units) => void
   onImported: () => void
 }
 
-export function Settings({ unit, onUnitChange, onImported }: Props) {
+export function Settings({ units, onUnitsChange, onImported }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
 
@@ -40,7 +40,27 @@ export function Settings({ unit, onUnitChange, onImported }: Props) {
         <legend>Weight unit</legend>
         {(['kg', 'lb'] as const).map((u) => (
           <label key={u} className="radio">
-            <input type="radio" name="unit" checked={unit === u} onChange={() => onUnitChange(u)} /> {u}
+            <input
+              type="radio"
+              name="weight-unit"
+              checked={units.weight === u}
+              onChange={() => onUnitsChange({ ...units, weight: u })}
+            />{' '}
+            {u}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="card">
+        <legend>Distance unit</legend>
+        {(['km', 'mi'] as const).map((u) => (
+          <label key={u} className="radio">
+            <input
+              type="radio"
+              name="distance-unit"
+              checked={units.distance === u}
+              onChange={() => onUnitsChange({ ...units, distance: u })}
+            />{' '}
+            {u}
           </label>
         ))}
       </fieldset>

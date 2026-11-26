@@ -1,16 +1,32 @@
 import { formatDate } from '../lib/id'
-import { sortByDateDesc, workoutVolume } from '../lib/stats'
-import type { WeightUnit, Workout } from '../lib/types'
-import { formatWeight } from '../lib/units'
+import { isCardio, sortByDateDesc, workoutDistanceKm, workoutVolume } from '../lib/stats'
+import type { ExerciseEntry, Units, Workout } from '../lib/types'
+import { formatDistance, formatDuration, formatPace, formatWeight } from '../lib/units'
 
 interface Props {
   workouts: Workout[]
-  unit: WeightUnit
+  units: Units
   onEdit: (w: Workout) => void
   onDelete: (w: Workout) => void
 }
 
-export function History({ workouts, unit, onEdit, onDelete }: Props) {
+function describe(ex: ExerciseEntry, units: Units): string {
+  if (!isCardio(ex)) return ex.sets.map((s) => `${s.reps}×${formatWeight(s.weightKg, units.weight)}`).join(', ')
+  const time = formatDuration(ex.durationSec)
+  if (!ex.distanceKm) return time
+  return `${formatDistance(ex.distanceKm, units.distance)} in ${time} (${formatPace(ex.durationSec / ex.distanceKm, units.distance)})`
+}
+
+function summary(w: Workout, units: Units): string {
+  const parts: string[] = []
+  const vol = workoutVolume(w)
+  const dist = workoutDistanceKm(w)
+  if (vol > 0) parts.push(`${formatWeight(vol, units.weight)} volume`)
+  if (dist > 0) parts.push(formatDistance(dist, units.distance))
+  return parts.join(' · ')
+}
+
+export function History({ workouts, units, onEdit, onDelete }: Props) {
   if (workouts.length === 0) {
     return <p className="empty">No workouts yet. Log your first one on the Log tab.</p>
   }
@@ -22,15 +38,12 @@ export function History({ workouts, unit, onEdit, onDelete }: Props) {
           <li key={w.id} className="card">
             <div className="history-head">
               <h3>{formatDate(w.date)}</h3>
-              <span className="muted">{formatWeight(workoutVolume(w), unit)} volume</span>
+              <span className="muted">{summary(w, units)}</span>
             </div>
             <ul className="history-exercises">
               {w.exercises.map((ex, i) => (
                 <li key={i}>
-                  <strong>{ex.name}</strong>{' '}
-                  <span className="muted">
-                    {ex.sets.map((s) => `${s.reps}×${formatWeight(s.weightKg, unit)}`).join(', ')}
-                  </span>
+                  <strong>{ex.name}</strong> <span className="muted">{describe(ex, units)}</span>
                 </li>
               ))}
             </ul>

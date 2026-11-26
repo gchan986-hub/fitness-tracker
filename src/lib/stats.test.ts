@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cardioProgressFor,
+  cardioRecords,
   estimateOneRepMax,
+  exerciseCatalog,
   exerciseKey,
-  exerciseNames,
-  lastSetsFor,
+  lastEntryFor,
   personalRecords,
   progressFor,
   sortByDateDesc,
+  workoutDistanceKm,
   workoutVolume,
 } from './stats'
-import { sets, workout } from '../test/fixtures'
+import type { CardioEntry, StrengthEntry } from './types'
+import { cardio, sets, workout } from '../test/fixtures'
 
 describe('exerciseKey', () => {
   it('ignores case and extra spaces', () => {
@@ -38,16 +42,21 @@ describe('workoutVolume', () => {
   })
 })
 
-describe('exerciseNames', () => {
-  it('dedupes by key, keeps the most recent spelling, sorts A–Z', () => {
+describe('exerciseCatalog', () => {
+  it('dedupes by key, keeps the most recent spelling and type, sorts A–Z', () => {
     const ws = [
       workout('2026-01-01', [{ name: 'bench press', sets: sets([5, 60]) }]),
       workout('2026-01-08', [
         { name: 'Bench Press', sets: sets([5, 62.5]) },
         { name: 'Deadlift', sets: sets([5, 120]) },
+        cardio('Run', 1500, 5),
       ]),
     ]
-    expect(exerciseNames(ws)).toEqual(['Bench Press', 'Deadlift'])
+    expect(exerciseCatalog(ws)).toEqual([
+      { name: 'Bench Press', kind: 'strength' },
+      { name: 'Deadlift', kind: 'strength' },
+      { name: 'Run', kind: 'cardio' },
+    ])
   })
 })
 
@@ -102,16 +111,57 @@ describe('personalRecords', () => {
   })
 })
 
-describe('lastSetsFor', () => {
-  it('returns a copy of the most recent sets', () => {
+describe('lastEntryFor', () => {
+  it('returns a copy of the most recent entry', () => {
     const old = workout('2026-01-01', [{ name: 'Row', sets: sets([10, 50]) }])
     const recent = workout('2026-01-08', [{ name: 'row', sets: sets([10, 55], [8, 55]) }])
-    const result = lastSetsFor([old, recent], 'Row')
-    expect(result).toEqual(sets([10, 55], [8, 55]))
-    result![0].reps = 99
-    expect(recent.exercises[0].sets[0].reps).toBe(10)
+    const result = lastEntryFor([old, recent], 'Row') as StrengthEntry
+    expect(result.sets).toEqual(sets([10, 55], [8, 55]))
+    result.sets[0].reps = 99
+    expect((recent.exercises[0] as StrengthEntry).sets[0].reps).toBe(10)
+  })
+  it('returns cardio entries too', () => {
+    const ws = [workout('2026-01-01', [cardio('Run', 1500, 5)])]
+    expect(lastEntryFor(ws, 'run')).toEqual(cardio('Run', 1500, 5))
   })
   it('is undefined for a new exercise', () => {
-    expect(lastSetsFor([], 'Row')).toBeUndefined()
+    expect(lastEntryFor([], 'Row')).toBeUndefined()
+  })
+})
+
+describe('cardio', () => {
+  const ws = [
+    workout('2026-01-01', [cardio('Run', 1800, 5), { name: 'Squat', sets: sets([5, 100]) }]),
+    workout('2026-01-01', [cardio('run', 660, 2)]),
+    workout('2026-01-05', [cardio('Run', 2400)]), // treadmill, no distance
+    workout('2026-01-08', [cardio('Run', 1500, 5), cardio('Bike', 3600, 30)]),
+  ]
+
+  it('ignores cardio in weights volume and sums distance', () => {
+    expect(workoutVolume(ws[0])).toBe(500)
+    expect(workoutDistanceKm(ws[3])).toBe(35)
+  })
+
+  it('gives one point per day with average pace over entries that had a distance', () => {
+    expect(cardioProgressFor(ws, 'Run')).toEqual([
+      { date: '2026-01-01', distanceKm: 7, durationSec: 2460, paceSecPerKm: 2460 / 7 },
+      { date: '2026-01-05', distanceKm: 0, durationSec: 2400 },
+      { date: '2026-01-08', distanceKm: 5, durationSec: 1500, paceSecPerKm: 300 },
+    ])
+  })
+
+  it('finds longest distance, fastest pace and longest time', () => {
+    expect(cardioRecords(ws, 'Run')).toEqual({
+      longestDistance: { distanceKm: 5, durationSec: 1800, date: '2026-01-01' },
+      fastestPace: { paceSecPerKm: 300, distanceKm: 5, date: '2026-01-08' },
+      longestDuration: { durationSec: 2400, date: '2026-01-05' },
+    })
+    expect(cardioRecords([], 'Run')).toEqual({})
+  })
+
+  it('keeps weights stats free of cardio entries with the same name', () => {
+    const mixed = [workout('2026-01-01', [cardio('Row', 600, 2) as CardioEntry, { name: 'Row', sets: sets([10, 50]) }])]
+    expect(progressFor(mixed, 'Row')).toHaveLength(1)
+    expect(personalRecords(mixed, 'Row').heaviest?.weightKg).toBe(50)
   })
 })

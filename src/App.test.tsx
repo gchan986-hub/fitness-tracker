@@ -4,7 +4,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { _resetForTests, saveWorkout } from './lib/db'
-import { sets, workout } from './test/fixtures'
+import { cardio, sets, workout } from './test/fixtures'
 
 beforeEach(async () => {
   await _resetForTests()
@@ -86,5 +86,76 @@ describe('App', () => {
     expect(localStorage.getItem('fitness-tracker:unit')).toBe('lb')
     await user.click(tab('Progress'))
     expect(await screen.findByText('330.7 lb × 3')).toBeInTheDocument()
+  })
+
+  it('logs cardio with pace and mixes it with weights', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Cardio' }))
+    await user.type(screen.getByLabelText('Exercise 1 name'), 'Run')
+    await user.type(screen.getByLabelText('Exercise 1 distance'), '5')
+    await user.type(screen.getByLabelText('Exercise 1 minutes'), '25')
+    expect(screen.getByText('Pace 5:00 /km')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '+ Add exercise' }))
+    await user.type(screen.getByLabelText('Exercise 2 name'), 'Squat')
+    await user.type(screen.getByLabelText('Exercise 2 set 1 reps'), '5')
+    await user.type(screen.getByLabelText('Exercise 2 set 1 weight'), '100')
+    await user.click(screen.getByRole('button', { name: 'Save workout' }))
+    expect(await screen.findByText('Workout saved')).toBeInTheDocument()
+
+    await user.click(tab('History'))
+    expect(await screen.findByText('5 km in 25:00 (5:00 /km)')).toBeInTheDocument()
+    expect(screen.getByText('500 kg volume · 5 km')).toBeInTheDocument()
+  })
+
+  it('switches to cardio and pre-fills last time when a known activity is typed', async () => {
+    await saveWorkout(workout('2026-01-01', [cardio('Run', 1530, 5)]))
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('Exercise 1 name'), 'run')
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Cardio' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('Exercise 1 minutes')).toHaveValue('25')
+    expect(screen.getByLabelText('Exercise 1 seconds')).toHaveValue('30')
+  })
+
+  it('rejects cardio without a time', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Cardio' }))
+    await user.type(screen.getByLabelText('Exercise 1 name'), 'Run')
+    await user.type(screen.getByLabelText('Exercise 1 seconds'), '75')
+    await user.click(screen.getByRole('button', { name: 'Save workout' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Run: enter a time')
+  })
+
+  it('shows cardio records and switches to miles', async () => {
+    await saveWorkout(workout('2026-01-01', [cardio('Run', 1800, 5)]))
+    await saveWorkout(workout('2026-01-08', [cardio('Run', 1500, 5)]))
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Progress' }))
+    expect(await screen.findByText('5:00 /km')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Pace (lower is faster)' })).toBeInTheDocument()
+
+    await user.click(tab('Settings'))
+    await user.click(screen.getByRole('radio', { name: 'mi' }))
+    await user.click(tab('Progress'))
+    expect(await screen.findByText('8:03 /mi')).toBeInTheDocument()
+    expect(screen.getByText('3.11 mi')).toBeInTheDocument()
+  })
+
+  it('leaves the tapped field empty and focused when pre-filling', async () => {
+    await saveWorkout(workout('2026-01-01', [{ name: 'Squat', sets: sets([5, 100], [5, 100]) }]))
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('Exercise 1 name'), 'Squat')
+    await user.click(screen.getByLabelText('Exercise 1 set 1 reps'))
+    await user.keyboard('3')
+    expect(screen.getByLabelText('Exercise 1 set 1 reps')).toHaveValue('3')
+    expect(screen.getByLabelText('Exercise 1 set 1 reps')).toHaveFocus()
+    expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('100')
+    expect(screen.getByLabelText('Exercise 1 set 2 reps')).toHaveValue('5')
   })
 })

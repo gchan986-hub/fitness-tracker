@@ -4,11 +4,24 @@ export interface WorkoutSet {
   weightKg: number
 }
 
-export interface ExerciseEntry {
+/** Weights exercise. `kind` is absent on entries saved before cardio existed. */
+export interface StrengthEntry {
+  kind?: 'strength'
   /** Exercise name as typed, e.g. "Bench Press". Matched case-insensitively. */
   name: string
   sets: WorkoutSet[]
 }
+
+/** Cardio activity. Distance is always stored in kilometres and is optional (e.g. a spin class). */
+export interface CardioEntry {
+  kind: 'cardio'
+  name: string
+  durationSec: number
+  distanceKm?: number
+}
+
+export type ExerciseEntry = StrengthEntry | CardioEntry
+export type ExerciseKind = 'strength' | 'cardio'
 
 export interface Workout {
   id: string
@@ -21,3 +34,8 @@ export interface Workout {
 }
 
 export type WeightUnit = 'kg' | 'lb'
+export type DistanceUnit = 'km' | 'mi'
+export interface Units {
+  weight: WeightUnit
+  distance: DistanceUnit
+}
