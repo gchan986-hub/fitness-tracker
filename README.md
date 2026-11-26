@@ -51,3 +51,12 @@ Weights are always stored in kilograms and converted for display. Estimated 1RM 
 - Cardio (distance / time / pace)
 - Saved routines and a rest timer
 - Weekly summary and streaks
+
+### Later: a native iPhone app
+
+The plan is to use this as a home-screen web app first and turn it into a real App Store app later
+(likely React Native + Expo), possibly with accounts and cloud sync so other people can use it.
+To keep that move cheap, everything in `src/lib/` (data model, stats, units, validation) is plain
+TypeScript with no React or browser dependencies except `db.ts`, which is the only file that touches
+storage. A native app would reuse `src/lib/` and its tests, and swap `db.ts` for on-device SQLite
+or a synced backend. The JSON backup format is the migration path for existing workouts.
