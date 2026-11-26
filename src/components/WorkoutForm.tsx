@@ -1,4 +1,4 @@
-import { useId, useImperativeHandle, useState, type Ref } from 'react'
+import { useEffect, useId, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { newId, todayLocal } from '../lib/id'
 import { dedupeExercises, sortRoutines, weekdayOf } from '../lib/routines'
 import { exerciseKey, isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
@@ -107,7 +107,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   const [date, setDate] = useState(editing?.date ?? todayLocal())
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [exercises, setExercises] = useState<ExerciseDraft[]>(
-    editing ? editing.exercises.map((ex) => entryToDraft(ex, units)) : [blankExercise()],
+    editing ? editing.exercises.map((ex) => entryToDraft(ex, units)) : [],
   )
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -126,17 +126,27 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   const loadRoutine = (r: Routine) => {
     const dirty = exercises.some((x) => x.name.trim() || !isUntouched(x))
     if (dirty && !confirm(`Replace the exercises you've entered with "${r.name}"?`)) return
-    setExercises(r.exercises.length ? r.exercises.map(draftFor) : [blankExercise()])
+    setExercises(r.exercises.map(draftFor))
     setRoutineName(r.name)
     setErrors([])
     setPicking(false)
   }
   useImperativeHandle(ref, () => ({ loadRoutine }))
 
-  /** Adds a picked exercise, replacing the starting card if it's still empty. */
+  /** Card to bring into view after the next render (a freshly added exercise). */
+  const scrollTo = useRef<string | null>(null)
+  useEffect(() => {
+    if (!scrollTo.current) return
+    document.querySelector(`[data-exercise="${scrollTo.current}"]`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    scrollTo.current = null
+  }, [exercises])
+
+  /** Adds a picked exercise to the workout and closes the list. */
   const addFromCatalog = (item: CatalogItem) => {
     const d = draftFor(item)
-    setExercises((xs) => (xs.length === 1 && !xs[0].name.trim() && isUntouched(xs[0]) ? [d] : [...xs, d]))
+    scrollTo.current = d.key
+    setExercises((xs) => [...xs, d])
+    setPicking(false)
   }
 
   const namedExercises = (): RoutineExercise[] =>
@@ -195,7 +205,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
     try {
       await onSave(workout)
       if (!editing) {
-        setExercises([blankExercise()])
+        setExercises([])
         setNotes('')
         setRoutineName('')
         setSavingRoutine(false)
@@ -286,16 +296,14 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                 onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, name: e.target.value }))}
                 onBlur={(e) => prefill(ex, e.relatedTarget)}
               />
-              {exercises.length > 1 && (
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label={`Remove exercise ${n}`}
-                  onClick={() => setExercises((xs) => xs.filter((x) => x.key !== ex.key))}
-                >
-                  ✕
-                </button>
-              )}
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Remove exercise ${n}`}
+                onClick={() => setExercises((xs) => xs.filter((x) => x.key !== ex.key))}
+              >
+                ✕
+              </button>
             </div>
 
             {ex.kind === 'cardio' ? (
@@ -391,22 +399,22 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
         )
       })}
 
-      {picking ? (
+      {exercises.length === 0 && (
+        <p className="empty-log muted">
+          {routines.length && !editing ? 'Start from a routine above, or add exercises one by one.' : 'No exercises yet.'}
+        </p>
+      )}
+      <button type="button" className="add-exercise wide" onClick={() => setPicking(true)}>
+        + Add exercise
+      </button>
+      {picking && (
         <ExercisePicker
+          title="Add exercise"
           catalog={catalog}
           selected={exercises.map((x) => x.name)}
           onPick={addFromCatalog}
           onClose={() => setPicking(false)}
         />
-      ) : (
-        <div className="add-row">
-          <button type="button" className="secondary" onClick={() => setExercises((xs) => [...xs, blankExercise()])}>
-            + Add exercise
-          </button>
-          <button type="button" className="secondary" onClick={() => setPicking(true)}>
-            Pick from list
-          </button>
-        </div>
       )}
 
       <label className="field">

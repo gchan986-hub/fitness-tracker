@@ -97,16 +97,16 @@ describe('fullCatalog', () => {
     const ws = [workout('2026-01-01', [{ name: 'Squat', sets: sets([5, 100]) }])]
     const rs = [routine('Mix', [], [{ name: 'squat', kind: 'cardio' }, { name: 'Row', kind: 'cardio' }])]
     expect(fullCatalog(ws, rs, false)).toEqual([
-      { name: 'Row', kind: 'cardio' },
-      { name: 'Squat', kind: 'strength' },
+      { name: 'Row', kind: 'cardio', own: true, group: 'Cardio' },
+      { name: 'Squat', kind: 'strength', own: true, group: 'Legs' },
     ])
   })
   it('appends built-in suggestions you have not used, without duplicating yours', () => {
     const ws = [workout('2026-01-01', [{ name: 'squat', sets: sets([5, 100]) }, cardio('RUN', 1500, 5)])]
     const cat = fullCatalog(ws, [])
     expect(cat.slice(0, 2)).toEqual([
-      { name: 'RUN', kind: 'cardio' },
-      { name: 'squat', kind: 'strength' },
+      { name: 'RUN', kind: 'cardio', own: true, group: 'Cardio' },
+      { name: 'squat', kind: 'strength', own: true, group: 'Legs' },
     ])
     const names = cat.map((c) => c.name.toLowerCase())
     expect(names.filter((n) => n === 'squat')).toHaveLength(1)

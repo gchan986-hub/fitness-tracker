@@ -16,7 +16,7 @@ export function RoutineEditor({ routine, catalog, onSave, onCancel }: Props) {
   const [name, setName] = useState(routine?.name ?? '')
   const [days, setDays] = useState<number[]>(routine?.days ?? [])
   const [exercises, setExercises] = useState<RoutineExercise[]>(routine?.exercises ?? [])
-  const [picking, setPicking] = useState(!routine)
+  const [picking, setPicking] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
 
   const move = (i: number, by: number) =>
@@ -80,17 +80,17 @@ export function RoutineEditor({ routine, catalog, onSave, onCancel }: Props) {
         </ol>
       )}
 
-      {picking ? (
+      <button type="button" className="add-exercise wide" onClick={() => setPicking(true)}>
+        + Add exercises
+      </button>
+      {picking && (
         <ExercisePicker
+          title="Add exercises"
           catalog={catalog}
           selected={exercises.map((e) => e.name)}
           onPick={(item) => setExercises((xs) => dedupeExercises([...xs, item]))}
           onClose={() => setPicking(false)}
         />
-      ) : (
-        <button type="button" className="secondary wide" onClick={() => setPicking(true)}>
-          + Add exercises
-        </button>
       )}
 
       {errors.length > 0 && (

@@ -86,9 +86,16 @@ export function isRoutine(v: unknown): v is Routine {
   )
 }
 
+const DEFAULT_GROUP_BY_KEY = new Map(DEFAULT_EXERCISES.map((d) => [exerciseKey(d.name), d.group]))
+
+/** Body part for an exercise: from the built-in list when the name matches, "Cardio" for any cardio. */
+export function groupFor(item: CatalogItem): string | undefined {
+  return DEFAULT_GROUP_BY_KEY.get(exerciseKey(item.name)) ?? (item.kind === 'cardio' ? 'Cardio' : undefined)
+}
+
 /**
- * Every exercise you've logged or put in a routine (sorted A–Z, logged history decides the type), followed by
- * built-in suggestions you haven't used yet, which carry a `group`.
+ * Every exercise you've logged or put in a routine (`own`, sorted A–Z, logged history decides the type),
+ * followed by built-in suggestions you haven't used yet. Each carries its body part when known.
  */
 export function fullCatalog(workouts: Workout[], routines: Routine[], includeDefaults = true): CatalogItem[] {
   const items = exerciseCatalog(workouts)
@@ -103,6 +110,10 @@ export function fullCatalog(workouts: Workout[], routines: Routine[], includeDef
     }
   }
   items.sort((a, b) => a.name.localeCompare(b.name))
+  for (const [i, item] of items.entries()) {
+    const group = groupFor(item)
+    items[i] = { ...item, own: true, ...(group ? { group } : {}) }
+  }
   if (includeDefaults) {
     for (const d of DEFAULT_EXERCISES) {
       if (!keys.has(exerciseKey(d.name))) items.push({ ...d })
