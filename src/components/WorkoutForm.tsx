@@ -10,6 +10,7 @@ import { ExercisePicker } from './ExercisePicker'
 import { SessionTimer } from './SessionTimer'
 import { readSessionStart, saveSessionStart } from '../lib/session'
 import { REST_OPTIONS } from '../lib/rest'
+import { clearDraft, readDraft, saveDraft } from '../lib/draft'
 import { formatDuration } from '../lib/units'
 import { SaveRoutinePanel } from './SaveRoutinePanel'
 
@@ -132,14 +133,35 @@ interface Props {
 
 export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, onSetDone, defaultRestSec = 90, ref }: Props) {
   const listId = useId()
-  const [date, setDate] = useState(editing?.date ?? todayLocal())
-  const [notes, setNotes] = useState(editing?.notes ?? '')
+  // A new workout picks up where you left off if the app was closed mid-session.
+  const [restored] = useState(() => (editing ? null : readDraft<ExerciseDraft>()))
+  const [showRestored, setShowRestored] = useState(!!restored)
+  const [date, setDate] = useState(editing?.date ?? restored?.date ?? todayLocal())
+  const [notes, setNotes] = useState(editing?.notes ?? restored?.notes ?? '')
   const [exercises, setExercises] = useState<ExerciseDraft[]>(
-    editing ? editing.exercises.map((ex) => ({ ...entryToDraft(ex, units), edited: true })) : [],
+    editing
+      ? editing.exercises.map((ex) => ({ ...entryToDraft(ex, units), edited: true }))
+      : (restored?.exercises ?? []),
   )
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const [routineName, setRoutineName] = useState(editing?.routineName ?? '')
+  const [routineName, setRoutineName] = useState(editing?.routineName ?? restored?.routineName ?? '')
+
+  // Save the in-progress workout on every change (not when editing a saved one).
+  useEffect(() => {
+    if (!editing) saveDraft({ date, notes, routineName, exercises })
+  }, [editing, date, notes, routineName, exercises])
+
+  const discardDraft = () => {
+    if (!confirm('Discard this unsaved workout?')) return
+    setExercises([])
+    setNotes('')
+    setRoutineName('')
+    setDate(todayLocal())
+    setStartedAt(null)
+    setShowRestored(false)
+    clearDraft()
+  }
   // New workout: live session timer. Editing: duration typed in minutes.
   const [startedAt, setStartedAtState] = useState<number | null>(() => (editing ? null : readSessionStart()))
   const setStartedAt = (at: number | null) => {
@@ -265,6 +287,8 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
         setNotes('')
         setRoutineName('')
         setStartedAt(null)
+        setShowRestored(false)
+        clearDraft()
         setSavingRoutine(false)
         setPicking(false)
       }
@@ -278,6 +302,19 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   return (
     <form className="workout-form" onSubmit={submit} noValidate aria-label={editing ? 'Edit workout' : 'Log workout'}>
       <h2>{editing ? 'Edit workout' : 'Log workout'}</h2>
+      {showRestored && (
+        <div className="restored" role="status">
+          <span>Picked up your unsaved workout where you left off.</span>
+          <span className="restored-actions">
+            <button type="button" className="secondary" onClick={() => setShowRestored(false)}>
+              OK
+            </button>
+            <button type="button" className="danger" onClick={discardDraft}>
+              Discard
+            </button>
+          </span>
+        </div>
+      )}
       <label className="field">
         Date
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />

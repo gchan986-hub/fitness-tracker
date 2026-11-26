@@ -632,4 +632,68 @@ describe('App', () => {
     await user.click(form.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('1 h 15 min · 500 kg volume')).toBeInTheDocument()
   })
+
+  it('keeps an unsaved workout when the app is closed and reopened', async () => {
+    const user = userEvent.setup()
+    const first = render(<App />)
+    await addExercise(user, 'Squat')
+    await user.selectOptions(screen.getByLabelText('Exercise 1 rest'), '180')
+    await user.type(screen.getByLabelText('Exercise 1 set 1 reps'), '5')
+    await user.type(screen.getByLabelText('Exercise 1 set 1 weight'), '100')
+    await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+    await addExercise(user, 'Run')
+    await user.type(screen.getByLabelText('Exercise 2 minutes'), '10')
+    await user.type(screen.getByLabelText('Notes (optional)'), 'felt strong')
+    first.unmount() // the phone closes the app
+
+    render(<App />)
+    expect(await screen.findByText('Picked up your unsaved workout where you left off.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Squat')
+    expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('100')
+    expect(screen.getByLabelText('Exercise 1 rest')).toHaveValue('180')
+    expect(screen.getByRole('button', { name: 'Exercise 1 set 1 done' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('Exercise 2 minutes')).toHaveValue('10')
+    expect(screen.getByLabelText('Notes (optional)')).toHaveValue('felt strong')
+    expect(screen.getByRole('timer', { name: 'Workout time' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'OK' }))
+    expect(screen.queryByText(/Picked up your unsaved workout/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save workout' }))
+    expect(await screen.findByText('Workout saved')).toBeInTheDocument()
+    expect(localStorage.getItem('fitness-tracker:draft')).toBeNull()
+  })
+
+  it('lets you discard a restored workout', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = userEvent.setup()
+    const first = render(<App />)
+    await addExercise(user, 'Squat')
+    await user.click(screen.getByRole('button', { name: 'Start now' }))
+    first.unmount()
+
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Discard' }))
+    expect(screen.queryByLabelText('Exercise 1 name')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start now' })).toBeInTheDocument()
+    expect(localStorage.getItem('fitness-tracker:draft')).toBeNull()
+  })
+
+  it('does not show a restore note when there is nothing to restore, or when editing', async () => {
+    await saveWorkout(workout('2026-01-01', [{ name: 'Row', sets: sets([10, 50]) }]))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Log workout' })
+    expect(screen.queryByText(/Picked up your unsaved workout/)).not.toBeInTheDocument()
+    await addExercise(user, 'Squat') // in-progress new workout
+    await user.click(tab('History'))
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const form = within(screen.getByRole('form', { name: 'Edit workout' }))
+    expect(form.queryByText(/Picked up your unsaved workout/)).not.toBeInTheDocument()
+    await user.click(form.getByRole('button', { name: 'Save changes' }))
+    // The new workout in progress is untouched by editing an old one
+    await user.click(tab('Log'))
+    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Squat')
+    expect(JSON.parse(localStorage.getItem('fitness-tracker:draft')!).exercises[0].name).toBe('Squat')
+  })
 })
