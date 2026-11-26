@@ -22,6 +22,8 @@ export interface StrengthEntry {
   name: string
   /** Absent on entries saved before equipment existed; the built-in default for the name is assumed. */
   equipment?: Equipment
+  /** Rest between sets chosen for this exercise; reused next time. Absent = the default from Settings. */
+  restSec?: number
   sets: WorkoutSet[]
 }
 
@@ -46,6 +48,8 @@ export interface Workout {
   createdAt: string
   /** Name of the routine this workout was started from, if any. */
   routineName?: string
+  /** Length of the session in seconds, from the workout timer or entered when editing. */
+  durationSec?: number
 }
 
 export interface RoutineExercise {

@@ -107,9 +107,9 @@ export default function App() {
     setRestState(r)
     saveRestState(r)
   }, [])
-  const startRest = () => {
+  const startRest = (sec: number) => {
     unlockAudio()
-    setRest({ endAt: Date.now() + restSec * 1000, totalSec: restSec })
+    setRest({ endAt: Date.now() + sec * 1000, totalSec: sec })
   }
   const adjustRest = (delta: number) => {
     if (!rest) return
@@ -180,6 +180,7 @@ export default function App() {
                 onSave={saveNew}
                 onSaveRoutine={saveRoutineInput}
                 onSetDone={startRest}
+                defaultRestSec={restSec}
               />
             </div>
             {tab === 'log' && editing && (

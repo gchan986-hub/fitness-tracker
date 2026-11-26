@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { formatDate } from '../lib/id'
 import { routineExercisesFrom, weekdayOf } from '../lib/routines'
+import { formatSessionLength } from '../lib/session'
 import { exerciseLabel } from '../lib/equipment'
 import { equipmentOf, isCardio, sortByDateDesc, workoutDistanceKm, workoutVolume } from '../lib/stats'
 import type { ExerciseEntry, RoutineInput, Units, Workout } from '../lib/types'
@@ -35,6 +36,7 @@ function describe(ex: ExerciseEntry, units: Units): string {
 
 function summary(w: Workout, units: Units): string {
   const parts: string[] = []
+  if (w.durationSec) parts.push(formatSessionLength(w.durationSec))
   const vol = workoutVolume(w)
   const dist = workoutDistanceKm(w)
   if (vol > 0) parts.push(`${formatWeight(vol, units.weight)} volume`)

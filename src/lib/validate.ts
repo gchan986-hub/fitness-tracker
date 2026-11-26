@@ -9,6 +9,8 @@ export function validateWorkout(w: Workout): string[] {
   const errors: string[] = []
   if (!DATE_RE.test(w.date) || Number.isNaN(Date.parse(w.date))) errors.push('Pick a valid date.')
   if (w.exercises.length === 0) errors.push('Add at least one exercise.')
+  if (w.durationSec !== undefined && (!Number.isFinite(w.durationSec) || w.durationSec < 0 || w.durationSec > 86400))
+    errors.push('Duration must be a number of minutes, up to 24 hours.')
   w.exercises.forEach((ex, i) => {
     const label = ex.name.trim() || `Exercise ${i + 1}`
     if (!ex.name.trim()) errors.push(`Exercise ${i + 1} needs a name.`)
@@ -40,6 +42,7 @@ function isEntry(ex: unknown): boolean {
   return (
     (ex.kind === undefined || ex.kind === 'strength') &&
     (ex.equipment === undefined || isEquipment(ex.equipment)) &&
+    (ex.restSec === undefined || typeof ex.restSec === 'number') &&
     Array.isArray(ex.sets) &&
     ex.sets.every((s) => isObj(s) && typeof s.reps === 'number' && typeof s.weightKg === 'number')
   )
@@ -54,6 +57,7 @@ export function isWorkout(value: unknown): value is Workout {
     typeof value.createdAt === 'string' &&
     (value.notes === undefined || typeof value.notes === 'string') &&
     (value.routineName === undefined || typeof value.routineName === 'string') &&
+    (value.durationSec === undefined || typeof value.durationSec === 'number') &&
     Array.isArray(value.exercises) &&
     value.exercises.every(isEntry)
   )

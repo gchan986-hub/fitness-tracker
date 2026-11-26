@@ -7,6 +7,10 @@ import type { Equipment, ExerciseEntry, ExerciseKind, Routine, RoutineExercise, 
 import { formatPace, fromKg, fromKm, toKg, toKm } from '../lib/units'
 import { validateWorkout } from '../lib/validate'
 import { ExercisePicker } from './ExercisePicker'
+import { SessionTimer } from './SessionTimer'
+import { readSessionStart, saveSessionStart } from '../lib/session'
+import { REST_OPTIONS } from '../lib/rest'
+import { formatDuration } from '../lib/units'
 import { SaveRoutinePanel } from './SaveRoutinePanel'
 
 interface SetDraft {
@@ -22,6 +26,8 @@ interface ExerciseDraft {
   name: string
   /** Weights only. */
   equipment?: Equipment
+  /** Weights only: rest between sets for this exercise; undefined = default. */
+  restSec?: number
   /** True once you've typed numbers in this card; until then it may be re-filled from history. */
   edited?: boolean
   sets: SetDraft[]
@@ -57,6 +63,7 @@ function entryToDraft(ex: ExerciseEntry, units: Units): ExerciseDraft {
   return {
     ...base,
     equipment: equipmentOf(ex),
+    ...(ex.restSec ? { restSec: ex.restSec } : {}),
     sets: ex.sets.map((s) => ({ key: newId(), reps: String(s.reps), weight: round(fromKg(s.weightKg, units.weight)) })),
   }
 }
@@ -90,6 +97,7 @@ function draftToEntry(d: ExerciseDraft, units: Units): ExerciseEntry {
   return {
     name,
     ...(d.equipment ? { equipment: d.equipment } : {}),
+    ...(d.restSec ? { restSec: d.restSec } : {}),
     sets: d.sets.map((s) => ({
       reps: num(s.reps),
       weightKg: s.weight.trim() === '' ? 0 : toKg(num(s.weight), units.weight),
@@ -115,12 +123,14 @@ interface Props {
   onSave: (w: Workout) => Promise<void>
   onSaveRoutine: (input: RoutineInput) => Promise<boolean>
   onCancel?: () => void
-  /** When given, each set gets a ✓ button that calls this (to start the rest timer). */
-  onSetDone?: () => void
+  /** When given, each set gets a ✓ button that calls this with the exercise's rest (to start the rest timer). */
+  onSetDone?: (restSec: number) => void
+  /** Rest used for exercises without their own setting. */
+  defaultRestSec?: number
   ref?: Ref<WorkoutFormHandle>
 }
 
-export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, onSetDone, ref }: Props) {
+export function WorkoutForm({ units, history, catalog, routines, editing, onSave, onSaveRoutine, onCancel, onSetDone, defaultRestSec = 90, ref }: Props) {
   const listId = useId()
   const [date, setDate] = useState(editing?.date ?? todayLocal())
   const [notes, setNotes] = useState(editing?.notes ?? '')
@@ -130,6 +140,15 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [routineName, setRoutineName] = useState(editing?.routineName ?? '')
+  // New workout: live session timer. Editing: duration typed in minutes.
+  const [startedAt, setStartedAtState] = useState<number | null>(() => (editing ? null : readSessionStart()))
+  const setStartedAt = (at: number | null) => {
+    setStartedAtState(at)
+    saveSessionStart(at)
+  }
+  const [durationMin, setDurationMin] = useState(
+    editing?.durationSec !== undefined ? String(Math.round(editing.durationSec / 60)) : '',
+  )
   const [picking, setPicking] = useState(false)
   const [savingRoutine, setSavingRoutine] = useState(false)
   const day = weekdayOf(date)
@@ -219,6 +238,11 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
     })
   }
 
+  const durationField = (): { durationSec?: number } => {
+    if (editing) return durationMin.trim() ? { durationSec: num(durationMin) * 60 } : {}
+    return startedAt ? { durationSec: Math.round((Date.now() - startedAt) / 1000) } : {}
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const workout: Workout = {
@@ -227,6 +251,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
       date,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(routineName ? { routineName } : {}),
+      ...durationField(),
       exercises: exercises.map((d) => draftToEntry(d, units)),
     }
     const problems = validateWorkout(workout)
@@ -239,6 +264,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
         setExercises([])
         setNotes('')
         setRoutineName('')
+        setStartedAt(null)
         setSavingRoutine(false)
         setPicking(false)
       }
@@ -256,6 +282,14 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
         Date
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
       </label>
+      {editing ? (
+        <label className="field">
+          Duration (minutes, optional)
+          <input inputMode="numeric" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} />
+        </label>
+      ) : (
+        <SessionTimer startedAt={startedAt} onStart={() => setStartedAt(Date.now())} onReset={() => setStartedAt(null)} />
+      )}
 
       {!editing && routines.length > 0 && (
         <div className="routine-picker">
@@ -338,21 +372,42 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
             </div>
 
             {ex.kind === 'strength' && (
-              <label className="equipment-field">
-                <span>Equipment</span>
-                <select
-                  aria-label={`Exercise ${n} equipment`}
-                  value={ex.equipment ?? ''}
-                  onChange={(e) => changeEquipment(ex, isEquipment(e.target.value) ? e.target.value : undefined)}
-                >
-                  <option value="">Not set</option>
-                  {EQUIPMENT.map((q) => (
-                    <option key={q.value} value={q.value}>
-                      {q.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="card-options">
+                <label>
+                  <span>Equipment</span>
+                  <select
+                    aria-label={`Exercise ${n} equipment`}
+                    value={ex.equipment ?? ''}
+                    onChange={(e) => changeEquipment(ex, isEquipment(e.target.value) ? e.target.value : undefined)}
+                  >
+                    <option value="">Not set</option>
+                    {EQUIPMENT.map((q) => (
+                      <option key={q.value} value={q.value}>
+                        {q.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {onSetDone && (
+                  <label>
+                    <span>Rest</span>
+                    <select
+                      aria-label={`Exercise ${n} rest`}
+                      value={ex.restSec ?? ''}
+                      onChange={(e) =>
+                        updateExercise(ex.key, (x) => ({ ...x, restSec: e.target.value ? Number(e.target.value) : undefined }))
+                      }
+                    >
+                      <option value="">Default ({formatDuration(defaultRestSec)})</option>
+                      {REST_OPTIONS.map((sec) => (
+                        <option key={sec} value={sec}>
+                          {formatDuration(sec)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
             )}
             {ex.kind === 'cardio' ? (
               <>
@@ -435,7 +490,9 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                           aria-pressed={!!s.done}
                           onClick={() => {
                             updateSet(ex.key, s.key, { done: !s.done })
-                            if (!s.done) onSetDone()
+                            if (s.done) return
+                            if (startedAt === null) setStartedAt(Date.now())
+                            onSetDone(ex.restSec ?? defaultRestSec)
                           }}
                         >
                           ✓
