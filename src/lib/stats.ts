@@ -48,6 +48,8 @@ export function workoutDistanceKm(workout: Workout): number {
 export interface CatalogItem {
   name: string
   kind: ExerciseKind
+  /** Body area for built-in suggestions; absent for your own exercises. */
+  group?: string
 }
 
 /** Distinct exercises (spelling and type from the most recent workout), sorted A–Z. */

@@ -1,7 +1,7 @@
 import { useId, useImperativeHandle, useState, type Ref } from 'react'
 import { newId, todayLocal } from '../lib/id'
 import { dedupeExercises, sortRoutines, weekdayOf } from '../lib/routines'
-import { isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
+import { exerciseKey, isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
 import type { ExerciseEntry, ExerciseKind, Routine, RoutineExercise, RoutineInput, Units, Workout } from '../lib/types'
 import { formatPace, fromKg, fromKm, toKg, toKm } from '../lib/units'
 import { validateWorkout } from '../lib/validate'
@@ -156,7 +156,12 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   const prefill = (ex: ExerciseDraft, nextFocus: EventTarget | null) => {
     if (!isUntouched(ex) || !ex.name.trim()) return
     const last = lastEntryFor(history, ex.name)
-    if (!last) return
+    if (!last) {
+      // Never logged: just match the type of a known exercise (e.g. "Swim" switches to cardio).
+      const known = catalog.find((c) => exerciseKey(c.name) === exerciseKey(ex.name))
+      if (known && known.kind !== ex.kind) updateExercise(ex.key, (e) => ({ ...e, kind: known.kind }))
+      return
+    }
     const el = nextFocus instanceof HTMLElement ? nextFocus : null
     const field = el?.closest('[data-exercise]')?.getAttribute('data-exercise') === ex.key ? el?.dataset.field : undefined
     updateExercise(ex.key, (e) => {

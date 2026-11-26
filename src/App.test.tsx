@@ -248,9 +248,9 @@ describe('App', () => {
     expect(screen.getByLabelText('Exercise 2 set 1 weight')).toHaveValue('50')
     expect(screen.getByRole('button', { name: 'Add Row' })).toHaveTextContent('✓ Added')
 
-    await user.type(screen.getByLabelText('Search exercises'), 'face pull')
-    await user.click(screen.getByRole('button', { name: 'Add “face pull” as weights' }))
-    expect(screen.getByLabelText('Exercise 3 name')).toHaveValue('face pull')
+    await user.type(screen.getByLabelText('Search exercises'), 'sled push')
+    await user.click(screen.getByRole('button', { name: 'Add “sled push” as weights' }))
+    expect(screen.getByLabelText('Exercise 3 name')).toHaveValue('sled push')
   })
 
   it('creates, starts, edits and deletes a routine from the Routines tab', async () => {
@@ -264,8 +264,8 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Routine name'), 'Leg day')
     await user.click(screen.getByRole('button', { name: 'Wednesday' }))
     await user.click(screen.getByRole('button', { name: 'Add Squat' }))
-    await user.type(screen.getByLabelText('Search exercises'), 'Lunge')
-    await user.click(screen.getByRole('button', { name: 'Add “Lunge” as weights' }))
+    await user.type(screen.getByLabelText('Search exercises'), 'lunge')
+    await user.click(screen.getByRole('button', { name: 'Add Lunge' }))
     await user.click(screen.getByRole('button', { name: 'Move Lunge up' }))
     await user.click(screen.getByRole('button', { name: 'Save routine' }))
 
@@ -299,5 +299,28 @@ describe('App', () => {
     await user.click(panel.getByRole('button', { name: 'Save routine' }))
     expect(await screen.findByText('Routine saved')).toBeInTheDocument()
     expect(await listRoutines()).toMatchObject([{ name: 'Pull', days: [4], exercises: [{ name: 'Row' }] }])
+  })
+
+  it('offers a built-in exercise list grouped by body area, yours first', async () => {
+    await saveWorkout(workout('2026-01-01', [{ name: 'Zercher Squat', sets: sets([5, 80]) }]))
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Pick from list' }))
+    const groups = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent)
+    expect(groups).toEqual(['Your exercises', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Full body', 'Cardio'])
+    expect(within(screen.getByRole('region', { name: 'Your exercises' })).getByText('Zercher Squat')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Search exercises'), 'swim')
+    await user.click(screen.getByRole('button', { name: 'Add Swim' }))
+    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Swim')
+    expect(screen.getByLabelText('Exercise 1 minutes')).toBeInTheDocument()
+  })
+
+  it('switches to cardio when a built-in cardio name is typed', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('Exercise 1 name'), 'rowing machine')
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Cardio' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

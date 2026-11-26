@@ -1,3 +1,4 @@
+import { DEFAULT_EXERCISES } from './defaultExercises'
 import { exerciseCatalog, exerciseKey, kindOf, type CatalogItem } from './stats'
 import type { ExerciseEntry, Routine, RoutineExercise, RoutineInput, Workout } from './types'
 
@@ -85,8 +86,11 @@ export function isRoutine(v: unknown): v is Routine {
   )
 }
 
-/** Every exercise you've logged or put in a routine, sorted A–Z. Logged history decides the type. */
-export function fullCatalog(workouts: Workout[], routines: Routine[]): CatalogItem[] {
+/**
+ * Every exercise you've logged or put in a routine (sorted A–Z, logged history decides the type), followed by
+ * built-in suggestions you haven't used yet, which carry a `group`.
+ */
+export function fullCatalog(workouts: Workout[], routines: Routine[], includeDefaults = true): CatalogItem[] {
   const items = exerciseCatalog(workouts)
   const keys = new Set(items.map((c) => exerciseKey(c.name)))
   for (const r of routines) {
@@ -98,5 +102,11 @@ export function fullCatalog(workouts: Workout[], routines: Routine[]): CatalogIt
       }
     }
   }
-  return items.sort((a, b) => a.name.localeCompare(b.name))
+  items.sort((a, b) => a.name.localeCompare(b.name))
+  if (includeDefaults) {
+    for (const d of DEFAULT_EXERCISES) {
+      if (!keys.has(exerciseKey(d.name))) items.push({ ...d })
+    }
+  }
+  return items
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DEFAULT_GROUPS } from '../lib/defaultExercises'
 import { exerciseKey, type CatalogItem } from '../lib/stats'
 import type { ExerciseKind } from '../lib/types'
 
@@ -11,6 +12,18 @@ interface Props {
 }
 
 const KIND_LABEL: Record<ExerciseKind, string> = { strength: 'Weights', cardio: 'Cardio' }
+const OWN = 'Your exercises'
+
+/** Your own exercises first, then built-in suggestions by body area; empty sections are dropped. */
+function sections(items: CatalogItem[]): [string, CatalogItem[]][] {
+  const order = [OWN, ...DEFAULT_GROUPS]
+  const byGroup = new Map<string, CatalogItem[]>()
+  for (const item of items) {
+    const g = item.group ?? OWN
+    byGroup.set(g, [...(byGroup.get(g) ?? []), item])
+  }
+  return order.filter((g) => byGroup.has(g)).map((g) => [g, byGroup.get(g)!])
+}
 
 /** Searchable list of every known exercise, with a way to add a new one. */
 export function ExercisePicker({ catalog, selected, onPick, onClose }: Props) {
@@ -38,21 +51,29 @@ export function ExercisePicker({ catalog, selected, onPick, onClose }: Props) {
           Done
         </button>
       </div>
-      {catalog.length === 0 && !key && <p className="muted">No exercises yet. Type a name above to add one.</p>}
       {matches.length > 0 && (
-        <ul className="picker-list">
-          {matches.map((c) => {
-            const isChosen = chosen.has(exerciseKey(c.name))
-            return (
-              <li key={c.name}>
-                <button type="button" aria-label={`Add ${c.name}`} onClick={() => onPick(c)}>
-                  <span>{c.name}</span>
-                  <span className={isChosen ? 'tag added' : 'tag'}>{isChosen ? '✓ Added' : KIND_LABEL[c.kind]}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="picker-list">
+          {sections(matches).map(([title, items]) => (
+            <section key={title} aria-label={title}>
+              <h4 className="picker-group">{title}</h4>
+              <ul>
+                {items.map((c) => {
+                  const isChosen = chosen.has(exerciseKey(c.name))
+                  return (
+                    <li key={c.name}>
+                      <button type="button" aria-label={`Add ${c.name}`} onClick={() => onPick(c)}>
+                        <span>{c.name}</span>
+                        <span className={isChosen ? 'tag added' : 'tag'}>
+                          {isChosen ? '✓ Added' : KIND_LABEL[c.kind]}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
       {key && !exact && (
         <div className="actions start">

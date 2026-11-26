@@ -96,9 +96,22 @@ describe('fullCatalog', () => {
   it('merges logged exercises with routine-only ones', () => {
     const ws = [workout('2026-01-01', [{ name: 'Squat', sets: sets([5, 100]) }])]
     const rs = [routine('Mix', [], [{ name: 'squat', kind: 'cardio' }, { name: 'Row', kind: 'cardio' }])]
-    expect(fullCatalog(ws, rs)).toEqual([
+    expect(fullCatalog(ws, rs, false)).toEqual([
       { name: 'Row', kind: 'cardio' },
       { name: 'Squat', kind: 'strength' },
     ])
+  })
+  it('appends built-in suggestions you have not used, without duplicating yours', () => {
+    const ws = [workout('2026-01-01', [{ name: 'squat', sets: sets([5, 100]) }, cardio('RUN', 1500, 5)])]
+    const cat = fullCatalog(ws, [])
+    expect(cat.slice(0, 2)).toEqual([
+      { name: 'RUN', kind: 'cardio' },
+      { name: 'squat', kind: 'strength' },
+    ])
+    const names = cat.map((c) => c.name.toLowerCase())
+    expect(names.filter((n) => n === 'squat')).toHaveLength(1)
+    expect(names.filter((n) => n === 'run')).toHaveLength(1)
+    expect(cat.find((c) => c.name === 'Bench Press')).toEqual({ name: 'Bench Press', kind: 'strength', group: 'Chest' })
+    expect(cat.find((c) => c.name === 'Swim')).toEqual({ name: 'Swim', kind: 'cardio', group: 'Cardio' })
   })
 })

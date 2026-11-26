@@ -6,7 +6,7 @@ A mobile-friendly workout log you can install on your phone's home screen (PWA).
 - **History** of every workout, newest first, with total weights volume and cardio distance. Edit or delete any entry.
 - **Progress** chart per exercise. Weights: estimated 1-rep max, heaviest set or volume. Cardio: distance, pace or time. Plus personal records for each.
 - **Routines**: save a session's exercises as a named routine (e.g. "Push day"), optionally tagged with weekdays. On the Log screen, tap a routine to load its exercises filled in with your latest numbers; routines planned for that day are shown first, marked "Today". Create, edit, reorder and delete routines on the Routines tab, or save any past workout from History as a routine.
-- **Exercise list**: "Pick from list" on the Log screen (and in the routine editor) is a searchable catalog of every exercise you've logged or saved, where you can also add new ones.
+- **Exercise list**: "Pick from list" on the Log screen (and in the routine editor) is a searchable catalog: your own exercises first, then about 75 built-in suggestions grouped by body area (`src/lib/defaultExercises.ts`). You can also add new ones. Typing a built-in cardio name switches that exercise to cardio.
 - **Settings**: kg or lb, km or mi, and backup export/import as JSON (includes routines).
 
 Data stays on your device in the browser (IndexedDB). There are no accounts and no server. Use **Settings → Download backup** regularly. Clearing the browser's site data deletes your workouts.
