@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { exerciseLabel } from '../lib/equipment'
 import { validateRoutine } from '../lib/routines'
 import type { RoutineExercise, RoutineInput } from '../lib/types'
 import { DayPicker } from './DayPicker'
@@ -34,7 +35,7 @@ export function SaveRoutinePanel({ exercises, defaultName, defaultDays, onSave, 
       </label>
       <DayPicker value={days} onChange={setDays} />
       <p className="muted">
-        {exercises.length ? exercises.map((e) => e.name).join(', ') : 'No exercises named yet.'}
+        {exercises.length ? exercises.map((e) => exerciseLabel(e.name, e.equipment)).join(', ') : 'No exercises named yet.'}
       </p>
       <p className="muted">Only the exercises are saved. Next time, they’re filled in with your latest numbers.</p>
       {errors.length > 0 && (

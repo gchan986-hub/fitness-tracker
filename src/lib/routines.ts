@@ -1,5 +1,6 @@
 import { DEFAULT_EXERCISES } from './defaultExercises'
-import { exerciseCatalog, exerciseKey, kindOf, type CatalogItem } from './stats'
+import { isEquipment } from './equipment'
+import { catalogKey, equipmentOf, exerciseCatalog, exerciseKey, isCardio, kindOf, type CatalogItem } from './stats'
 import type { ExerciseEntry, Routine, RoutineExercise, RoutineInput, Workout } from './types'
 
 /** Monday-first display order; `d` is the Date.getDay() value. */
@@ -31,22 +32,33 @@ export function formatDays(days: number[]): string {
 
 const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ')
 
-/** Trims names, drops blanks and keeps the first of any duplicates (case-insensitive). */
+/** Trims names, drops blanks and keeps the first of any duplicates (same name, any casing, and equipment). */
 export function dedupeExercises(items: RoutineExercise[]): RoutineExercise[] {
   const seen = new Set<string>()
   const out: RoutineExercise[] = []
   for (const item of items) {
     const name = cleanName(item.name)
-    const key = exerciseKey(name)
-    if (!key || seen.has(key)) continue
+    if (!exerciseKey(name)) continue
+    const clean: RoutineExercise = {
+      name,
+      kind: item.kind,
+      ...(item.kind === 'strength' && item.equipment ? { equipment: item.equipment } : {}),
+    }
+    const key = catalogKey(clean)
+    if (seen.has(key)) continue
     seen.add(key)
-    out.push({ name, kind: item.kind })
+    out.push(clean)
   }
   return out
 }
 
 export function routineExercisesFrom(entries: ExerciseEntry[]): RoutineExercise[] {
-  return dedupeExercises(entries.map((e) => ({ name: e.name, kind: kindOf(e) })))
+  return dedupeExercises(
+    entries.map((e) => {
+      const equipment = isCardio(e) ? undefined : equipmentOf(e)
+      return { name: e.name, kind: kindOf(e), ...(equipment ? { equipment } : {}) }
+    }),
+  )
 }
 
 /** Routines planned for `day` first, then the rest; A–Z within each group. */
@@ -82,7 +94,13 @@ export function isRoutine(v: unknown): v is Routine {
     Array.isArray(v.days) &&
     v.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) &&
     Array.isArray(v.exercises) &&
-    v.exercises.every((e) => isObj(e) && typeof e.name === 'string' && (e.kind === 'strength' || e.kind === 'cardio'))
+    v.exercises.every(
+      (e) =>
+        isObj(e) &&
+        typeof e.name === 'string' &&
+        (e.kind === 'strength' || e.kind === 'cardio') &&
+        (e.equipment === undefined || isEquipment(e.equipment)),
+    )
   )
 }
 
@@ -99,13 +117,16 @@ export function groupFor(item: CatalogItem): string | undefined {
  */
 export function fullCatalog(workouts: Workout[], routines: Routine[], includeDefaults = true): CatalogItem[] {
   const items = exerciseCatalog(workouts)
-  const keys = new Set(items.map((c) => exerciseKey(c.name)))
+  const keys = new Set(items.map(catalogKey))
+  // Logged history decides whether a name is weights or cardio.
+  const loggedKind = new Map(items.map((c) => [exerciseKey(c.name), c.kind]))
   for (const r of routines) {
-    for (const e of r.exercises) {
-      const key = exerciseKey(e.name)
-      if (key && !keys.has(key)) {
+    for (const e of dedupeExercises(r.exercises)) {
+      const key = catalogKey(e)
+      const kind = loggedKind.get(exerciseKey(e.name))
+      if (!keys.has(key) && (kind === undefined || kind === e.kind)) {
         keys.add(key)
-        items.push({ name: cleanName(e.name), kind: e.kind })
+        items.push(e)
       }
     }
   }
@@ -116,7 +137,7 @@ export function fullCatalog(workouts: Workout[], routines: Routine[], includeDef
   }
   if (includeDefaults) {
     for (const d of DEFAULT_EXERCISES) {
-      if (!keys.has(exerciseKey(d.name))) items.push({ ...d })
+      if (!keys.has(catalogKey(d))) items.push({ ...d })
     }
   }
   return items

@@ -56,7 +56,7 @@ describe('dedupeExercises / routineExercisesFrom', () => {
   it('reads exercises from a logged workout', () => {
     const w = workout('2026-01-01', [{ name: 'Squat', sets: sets([5, 100]) }, cardio('Run', 600, 2)])
     expect(routineExercisesFrom(w.exercises)).toEqual([
-      { name: 'Squat', kind: 'strength' },
+      { name: 'Squat', kind: 'strength', equipment: 'barbell' },
       { name: 'Run', kind: 'cardio' },
     ])
   })
@@ -98,7 +98,7 @@ describe('fullCatalog', () => {
     const rs = [routine('Mix', [], [{ name: 'squat', kind: 'cardio' }, { name: 'Row', kind: 'cardio' }])]
     expect(fullCatalog(ws, rs, false)).toEqual([
       { name: 'Row', kind: 'cardio', own: true, group: 'Cardio' },
-      { name: 'Squat', kind: 'strength', own: true, group: 'Legs' },
+      { name: 'Squat', kind: 'strength', equipment: 'barbell', own: true, group: 'Legs' },
     ])
   })
   it('appends built-in suggestions you have not used, without duplicating yours', () => {
@@ -106,12 +106,49 @@ describe('fullCatalog', () => {
     const cat = fullCatalog(ws, [])
     expect(cat.slice(0, 2)).toEqual([
       { name: 'RUN', kind: 'cardio', own: true, group: 'Cardio' },
-      { name: 'squat', kind: 'strength', own: true, group: 'Legs' },
+      { name: 'squat', kind: 'strength', equipment: 'barbell', own: true, group: 'Legs' },
     ])
     const names = cat.map((c) => c.name.toLowerCase())
     expect(names.filter((n) => n === 'squat')).toHaveLength(1)
     expect(names.filter((n) => n === 'run')).toHaveLength(1)
-    expect(cat.find((c) => c.name === 'Bench Press')).toEqual({ name: 'Bench Press', kind: 'strength', group: 'Chest' })
+    expect(cat.find((c) => c.name === 'Bench Press')).toEqual({
+      name: 'Bench Press',
+      kind: 'strength',
+      group: 'Chest',
+      equipment: 'barbell',
+    })
     expect(cat.find((c) => c.name === 'Swim')).toEqual({ name: 'Swim', kind: 'cardio', group: 'Cardio' })
+  })
+  it('lists the same lift on different equipment separately, and keeps defaults for other equipment', () => {
+    const ws = [
+      workout('2026-01-01', [{ name: 'Bench Press', equipment: 'dumbbell', sets: sets([10, 30]) }]),
+      workout('2026-01-02', [{ name: 'Bench Press', sets: sets([5, 80]) }]), // old entry: default barbell
+    ]
+    const benches = fullCatalog(ws, []).filter((c) => c.name === 'Bench Press')
+    expect(benches).toEqual([
+      { name: 'Bench Press', kind: 'strength', equipment: 'barbell', own: true, group: 'Chest' },
+      { name: 'Bench Press', kind: 'strength', equipment: 'dumbbell', own: true, group: 'Chest' },
+    ])
+  })
+})
+
+describe('dedupeExercises with equipment', () => {
+  it('keeps the same name on different equipment, drops equipment on cardio', () => {
+    expect(
+      dedupeExercises([
+        { name: 'Row', kind: 'strength', equipment: 'cable' },
+        { name: 'row', kind: 'strength', equipment: 'cable' },
+        { name: 'Row', kind: 'strength', equipment: 'dumbbell' },
+        { name: 'Run', kind: 'cardio', equipment: 'barbell' },
+      ]),
+    ).toEqual([
+      { name: 'Row', kind: 'strength', equipment: 'cable' },
+      { name: 'Row', kind: 'strength', equipment: 'dumbbell' },
+      { name: 'Run', kind: 'cardio' },
+    ])
+  })
+  it('validates equipment in imported routines', () => {
+    expect(isRoutine(routine('A', [], [{ name: 'Row', kind: 'strength', equipment: 'cable' }]))).toBe(true)
+    expect(isRoutine(routine('A', [], [{ name: 'Row', kind: 'strength', equipment: 'spoon' as never }]))).toBe(false)
   })
 })

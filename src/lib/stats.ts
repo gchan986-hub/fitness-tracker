@@ -1,4 +1,5 @@
-import type { CardioEntry, ExerciseEntry, ExerciseKind, StrengthEntry, Workout, WorkoutSet } from './types'
+import { defaultEquipmentFor } from './defaultExercises'
+import type { CardioEntry, Equipment, ExerciseEntry, ExerciseKind, StrengthEntry, Workout, WorkoutSet } from './types'
 
 /** Canonical key used to group the same exercise typed with different casing/spacing. */
 export function exerciseKey(name: string): string {
@@ -8,9 +9,21 @@ export function exerciseKey(name: string): string {
 export const isCardio = (e: ExerciseEntry): e is CardioEntry => e.kind === 'cardio'
 export const kindOf = (e: ExerciseEntry): ExerciseKind => (isCardio(e) ? 'cardio' : 'strength')
 
-function strengthEntries(w: Workout, key?: string): StrengthEntry[] {
+/** Equipment used for a weights entry: as logged, else the built-in default for its name. */
+export function equipmentOf(e: StrengthEntry): Equipment | undefined {
+  return e.equipment ?? defaultEquipmentFor(e.name)
+}
+
+/**
+ * Weights entries, optionally only those for one exercise. The same exercise with different equipment counts as a
+ * different exercise; `equipment` defaults to the built-in default for the name.
+ */
+function strengthEntries(w: Workout, name?: string, equipment?: Equipment): StrengthEntry[] {
+  const key = name === undefined ? undefined : exerciseKey(name)
+  const eq = name === undefined ? undefined : (equipment ?? defaultEquipmentFor(name))
   return w.exercises.filter(
-    (e): e is StrengthEntry => !isCardio(e) && (key === undefined || exerciseKey(e.name) === key),
+    (e): e is StrengthEntry =>
+      !isCardio(e) && (key === undefined || (exerciseKey(e.name) === key && equipmentOf(e) === eq)),
   )
 }
 
@@ -48,22 +61,34 @@ export function workoutDistanceKm(workout: Workout): number {
 export interface CatalogItem {
   name: string
   kind: ExerciseKind
+  /** For weights exercises: the equipment (the same lift on different equipment is a separate item). */
+  equipment?: Equipment
   /** Body part (e.g. "Chest"), when known. */
   group?: string
   /** True for exercises you've logged or put in a routine; false/absent for built-in suggestions. */
   own?: boolean
 }
 
-/** Distinct exercises (spelling and type from the most recent workout), sorted A–Z. */
+/** Identity of an exercise: name (any casing) plus equipment for weights. */
+export function catalogKey(item: { name: string; kind?: ExerciseKind; equipment?: Equipment }): string {
+  return `${exerciseKey(item.name)}|${item.kind === 'cardio' ? '' : (item.equipment ?? '')}`
+}
+
+/** Distinct exercises (spelling from the most recent workout), one per name + equipment, sorted A–Z. */
 export function exerciseCatalog(workouts: Workout[]): CatalogItem[] {
   const byKey = new Map<string, CatalogItem>()
   for (const w of sortByDateDesc(workouts)) {
     for (const ex of w.exercises) {
-      const key = exerciseKey(ex.name)
-      if (key && !byKey.has(key)) byKey.set(key, { name: ex.name.trim(), kind: kindOf(ex) })
+      if (!exerciseKey(ex.name)) continue
+      const equipment = isCardio(ex) ? undefined : equipmentOf(ex)
+      const item: CatalogItem = { name: ex.name.trim(), kind: kindOf(ex), ...(equipment ? { equipment } : {}) }
+      const key = catalogKey(item)
+      if (!byKey.has(key)) byKey.set(key, item)
     }
   }
-  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return [...byKey.values()].sort(
+    (a, b) => a.name.localeCompare(b.name) || (a.equipment ?? '').localeCompare(b.equipment ?? ''),
+  )
 }
 
 export function sortByDateDesc(workouts: Workout[]): Workout[] {
@@ -82,12 +107,11 @@ export interface ProgressPoint {
   volumeKg: number
 }
 
-/** One point per date for the given weights exercise, oldest first. */
-export function progressFor(workouts: Workout[], exerciseName: string): ProgressPoint[] {
-  const key = exerciseKey(exerciseName)
+/** One point per date for the given weights exercise (and equipment), oldest first. */
+export function progressFor(workouts: Workout[], exerciseName: string, equipment?: Equipment): ProgressPoint[] {
   const byDate = new Map<string, ProgressPoint>()
   for (const w of workouts) {
-    for (const ex of strengthEntries(w, key)) {
+    for (const ex of strengthEntries(w, exerciseName, equipment)) {
       for (const set of ex.sets) {
         const p = byDate.get(w.date) ?? { date: w.date, topWeightKg: 0, est1RmKg: 0, volumeKg: 0 }
         p.topWeightKg = Math.max(p.topWeightKg, set.weightKg)
@@ -107,11 +131,10 @@ export interface PersonalRecords {
 }
 
 /** All-time bests for a weights exercise. Ties go to the earliest date (when the record was first set). */
-export function personalRecords(workouts: Workout[], exerciseName: string): PersonalRecords {
-  const key = exerciseKey(exerciseName)
+export function personalRecords(workouts: Workout[], exerciseName: string, equipment?: Equipment): PersonalRecords {
   const prs: PersonalRecords = {}
   for (const w of oldestFirst(workouts)) {
-    for (const ex of strengthEntries(w, key)) {
+    for (const ex of strengthEntries(w, exerciseName, equipment)) {
       for (const set of ex.sets) {
         if (set.reps <= 0 || set.weightKg <= 0) continue
         if (!prs.heaviest || set.weightKg > prs.heaviest.weightKg) {
@@ -124,7 +147,7 @@ export function personalRecords(workouts: Workout[], exerciseName: string): Pers
       }
     }
   }
-  for (const p of progressFor(workouts, exerciseName)) {
+  for (const p of progressFor(workouts, exerciseName, equipment)) {
     if (p.volumeKg > 0 && (!prs.mostVolumeInDay || p.volumeKg > prs.mostVolumeInDay.volumeKg)) {
       prs.mostVolumeInDay = { volumeKg: p.volumeKg, date: p.date }
     }
@@ -192,11 +215,21 @@ export function cardioRecords(workouts: Workout[], activity: string): CardioReco
   return r
 }
 
-/** Most recent entry for an exercise (a copy), to pre-fill the next session. */
-export function lastEntryFor(workouts: Workout[], exerciseName: string): ExerciseEntry | undefined {
+/**
+ * Most recent entry for an exercise (a copy), to pre-fill the next session. With `equipment`, only weights entries
+ * done on that equipment match; without it, the latest entry on any equipment does.
+ */
+export function lastEntryFor(
+  workouts: Workout[],
+  exerciseName: string,
+  equipment?: Equipment,
+): ExerciseEntry | undefined {
   const key = exerciseKey(exerciseName)
+  const fits = (e: ExerciseEntry) =>
+    exerciseKey(e.name) === key &&
+    (isCardio(e) || (e.sets.length > 0 && (equipment === undefined || equipmentOf(e) === equipment)))
   for (const w of sortByDateDesc(workouts)) {
-    const ex = w.exercises.find((e) => exerciseKey(e.name) === key && (isCardio(e) || e.sets.length > 0))
+    const ex = w.exercises.find(fits)
     if (ex) return isCardio(ex) ? { ...ex } : { ...ex, sets: ex.sets.map((s) => ({ ...s })) }
   }
   return undefined

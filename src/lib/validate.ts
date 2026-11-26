@@ -1,3 +1,4 @@
+import { isEquipment } from './equipment'
 import { isCardio } from './stats'
 import type { Workout } from './types'
 
@@ -38,6 +39,7 @@ function isEntry(ex: unknown): boolean {
   }
   return (
     (ex.kind === undefined || ex.kind === 'strength') &&
+    (ex.equipment === undefined || isEquipment(ex.equipment)) &&
     Array.isArray(ex.sets) &&
     ex.sets.every((s) => isObj(s) && typeof s.reps === 'number' && typeof s.weightKg === 'number')
   )

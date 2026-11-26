@@ -1,73 +1,89 @@
-import type { ExerciseKind } from './types'
+import type { Equipment, ExerciseKind } from './types'
 
 export interface DefaultExercise {
   name: string
   kind: ExerciseKind
   group: string
+  /** Usual equipment for a weights exercise; it can be changed when logging. */
+  equipment?: Equipment
 }
 
-const w = (group: string, names: string[]): DefaultExercise[] =>
-  names.map((name) => ({ name, kind: 'strength', group }))
+const w = (group: string, list: [string, Equipment][]): DefaultExercise[] =>
+  list.map(([name, equipment]) => ({ name, kind: 'strength', group, equipment }))
 
 /** Built-in suggestions shown in the exercise list. Groups are listed in display order. */
 export const DEFAULT_EXERCISES: DefaultExercise[] = [
   ...w('Chest', [
-    'Bench Press',
-    'Incline Bench Press',
-    'Dumbbell Bench Press',
-    'Incline Dumbbell Press',
-    'Chest Fly',
-    'Cable Crossover',
-    'Push-up',
-    'Dip',
+    ['Bench Press', 'barbell'],
+    ['Incline Bench Press', 'barbell'],
+    ['Decline Bench Press', 'barbell'],
+    ['Chest Press', 'machine'],
+    ['Chest Fly', 'dumbbell'],
+    ['Pec Deck', 'machine'],
+    ['Cable Crossover', 'cable'],
+    ['Push-up', 'bodyweight'],
+    ['Dip', 'bodyweight'],
   ]),
   ...w('Back', [
-    'Deadlift',
-    'Pull-up',
-    'Chin-up',
-    'Lat Pulldown',
-    'Barbell Row',
-    'Dumbbell Row',
-    'Seated Cable Row',
-    'T-Bar Row',
-    'Face Pull',
+    ['Deadlift', 'barbell'],
+    ['Pull-up', 'bodyweight'],
+    ['Chin-up', 'bodyweight'],
+    ['Lat Pulldown', 'cable'],
+    ['Bent-over Row', 'barbell'],
+    ['One-arm Row', 'dumbbell'],
+    ['Seated Cable Row', 'cable'],
+    ['T-Bar Row', 'plate'],
+    ['Chest-supported Row', 'machine'],
+    ['Face Pull', 'cable'],
+    ['Back Extension', 'bodyweight'],
   ]),
   ...w('Legs', [
-    'Squat',
-    'Front Squat',
-    'Goblet Squat',
-    'Leg Press',
-    'Romanian Deadlift',
-    'Lunge',
-    'Bulgarian Split Squat',
-    'Leg Extension',
-    'Leg Curl',
-    'Hip Thrust',
-    'Calf Raise',
+    ['Squat', 'barbell'],
+    ['Front Squat', 'barbell'],
+    ['Goblet Squat', 'dumbbell'],
+    ['Hack Squat', 'plate'],
+    ['Leg Press', 'plate'],
+    ['Romanian Deadlift', 'barbell'],
+    ['Lunge', 'dumbbell'],
+    ['Bulgarian Split Squat', 'dumbbell'],
+    ['Leg Extension', 'machine'],
+    ['Leg Curl', 'machine'],
+    ['Hip Thrust', 'barbell'],
+    ['Calf Raise', 'machine'],
   ]),
   ...w('Shoulders', [
-    'Overhead Press',
-    'Dumbbell Shoulder Press',
-    'Arnold Press',
-    'Lateral Raise',
-    'Front Raise',
-    'Rear Delt Fly',
-    'Upright Row',
-    'Shrug',
+    ['Overhead Press', 'barbell'],
+    ['Shoulder Press', 'machine'],
+    ['Arnold Press', 'dumbbell'],
+    ['Lateral Raise', 'dumbbell'],
+    ['Front Raise', 'dumbbell'],
+    ['Rear Delt Fly', 'dumbbell'],
+    ['Upright Row', 'barbell'],
+    ['Shrug', 'dumbbell'],
   ]),
   ...w('Arms', [
-    'Barbell Curl',
-    'Dumbbell Curl',
-    'Hammer Curl',
-    'Preacher Curl',
-    'Cable Curl',
-    'Tricep Pushdown',
-    'Skull Crusher',
-    'Overhead Tricep Extension',
-    'Close-Grip Bench Press',
+    ['Bicep Curl', 'dumbbell'],
+    ['Hammer Curl', 'dumbbell'],
+    ['Preacher Curl', 'barbell'],
+    ['Concentration Curl', 'dumbbell'],
+    ['Tricep Pushdown', 'cable'],
+    ['Skull Crusher', 'barbell'],
+    ['Overhead Tricep Extension', 'dumbbell'],
+    ['Close-Grip Bench Press', 'barbell'],
   ]),
-  ...w('Core', ['Crunch', 'Cable Crunch', 'Hanging Leg Raise', 'Russian Twist', 'Ab Wheel Rollout']),
-  ...w('Full body', ['Kettlebell Swing', 'Power Clean', 'Thruster']),
+  ...w('Core', [
+    ['Crunch', 'bodyweight'],
+    ['Cable Crunch', 'cable'],
+    ['Hanging Leg Raise', 'bodyweight'],
+    ['Russian Twist', 'bodyweight'],
+    ['Ab Wheel Rollout', 'bodyweight'],
+  ]),
+  ...w('Full body', [
+    ['Kettlebell Swing', 'kettlebell'],
+    ['Turkish Get-up', 'kettlebell'],
+    ['Power Clean', 'barbell'],
+    ['Thruster', 'barbell'],
+  ]),
   ...[
     'Run',
     'Treadmill',
@@ -86,3 +102,13 @@ export const DEFAULT_EXERCISES: DefaultExercise[] = [
 ]
 
 export const DEFAULT_GROUPS = [...new Set(DEFAULT_EXERCISES.map((e) => e.group))]
+
+const norm = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase()
+const DEFAULT_EQUIPMENT = new Map(
+  DEFAULT_EXERCISES.flatMap((d) => (d.equipment ? [[norm(d.name), d.equipment] as const] : [])),
+)
+
+/** Usual equipment for a built-in exercise name, if any. */
+export function defaultEquipmentFor(name: string): Equipment | undefined {
+  return DEFAULT_EQUIPMENT.get(norm(name))
+}

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { formatDate } from '../lib/id'
 import { routineExercisesFrom, weekdayOf } from '../lib/routines'
-import { isCardio, sortByDateDesc, workoutDistanceKm, workoutVolume } from '../lib/stats'
+import { exerciseLabel } from '../lib/equipment'
+import { equipmentOf, isCardio, sortByDateDesc, workoutDistanceKm, workoutVolume } from '../lib/stats'
 import type { ExerciseEntry, RoutineInput, Units, Workout } from '../lib/types'
 import { formatDistance, formatDuration, formatPace, formatWeight } from '../lib/units'
 import { SaveRoutinePanel } from './SaveRoutinePanel'
@@ -15,7 +16,18 @@ interface Props {
 }
 
 function describe(ex: ExerciseEntry, units: Units): string {
-  if (!isCardio(ex)) return ex.sets.map((s) => `${s.reps}×${formatWeight(s.weightKg, units.weight)}`).join(', ')
+  if (!isCardio(ex)) {
+    const bodyweight = equipmentOf(ex) === 'bodyweight'
+    return ex.sets
+      .map((s) =>
+        bodyweight
+          ? s.weightKg > 0
+            ? `${s.reps} × +${formatWeight(s.weightKg, units.weight)}`
+            : `${s.reps} reps`
+          : `${s.reps}×${formatWeight(s.weightKg, units.weight)}`,
+      )
+      .join(', ')
+  }
   const time = formatDuration(ex.durationSec)
   if (!ex.distanceKm) return time
   return `${formatDistance(ex.distanceKm, units.distance)} in ${time} (${formatPace(ex.durationSec / ex.distanceKm, units.distance)})`
@@ -51,7 +63,8 @@ export function History({ workouts, units, onEdit, onDelete, onSaveRoutine }: Pr
             <ul className="history-exercises">
               {w.exercises.map((ex, i) => (
                 <li key={i}>
-                  <strong>{ex.name}</strong> <span className="muted">{describe(ex, units)}</span>
+                  <strong>{isCardio(ex) ? ex.name : exerciseLabel(ex.name, equipmentOf(ex))}</strong>{' '}
+                  <span className="muted">{describe(ex, units)}</span>
                 </li>
               ))}
             </ul>

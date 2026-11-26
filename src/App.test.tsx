@@ -17,6 +17,10 @@ type User = ReturnType<typeof userEvent.setup>
 const tab = (name: string) => screen.getByRole('button', { name })
 const dialog = () => within(screen.getByRole('dialog'))
 
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** Matches a list button for `name`, whatever its equipment ("Add Bench Press · Barbell"). */
+const addButton = (name: string) => new RegExp(`^Add ${escape(name)}( · .+)?$`)
+
 /** Taps "+ Add exercise", searches, and picks the exercise (adding it as new if it isn't listed). */
 async function addExercise(user: User, name: string, asNew?: 'weights' | 'cardio') {
   await user.click(await screen.findByRole('button', { name: '+ Add exercise' }))
@@ -24,7 +28,7 @@ async function addExercise(user: User, name: string, asNew?: 'weights' | 'cardio
   await user.click(
     asNew
       ? dialog().getByRole('button', { name: `Add “${name}” as ${asNew}` })
-      : dialog().getByRole('button', { name: `Add ${name}` }),
+      : dialog().getAllByRole('button', { name: addButton(name) })[0],
   )
 }
 
@@ -78,13 +82,13 @@ describe('App', () => {
 
     await user.click(d.getByRole('button', { name: 'Chest' }))
     const chest = d.getAllByRole('button', { name: /^Add / }).map((b) => b.getAttribute('aria-label'))
-    expect(chest[0]).toBe('Add bench press') // yours first, recognised as chest
-    expect(chest).toContain('Add Chest Fly')
-    expect(chest).not.toContain('Add Squat')
+    expect(chest[0]).toBe('Add bench press · Barbell') // yours first, recognised as chest
+    expect(chest).toContain('Add Chest Fly · Dumbbell')
+    expect(chest).not.toContain('Add Squat · Barbell')
 
     await user.click(d.getByRole('button', { name: 'Yours' }))
     expect(d.getAllByRole('button', { name: /^Add / }).map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Add bench press',
+      'Add bench press · Barbell',
       'Add Zercher Squat',
     ])
 
@@ -93,10 +97,15 @@ describe('App', () => {
     const arms = within(d.getByRole('region', { name: 'Arms' }))
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label'))
-    expect(arms).toEqual(['Add Barbell Curl', 'Add Dumbbell Curl', 'Add Hammer Curl', 'Add Preacher Curl', 'Add Cable Curl'])
+    expect(arms).toEqual([
+      'Add Bicep Curl · Dumbbell',
+      'Add Hammer Curl · Dumbbell',
+      'Add Preacher Curl · Barbell',
+      'Add Concentration Curl · Dumbbell',
+    ])
     // "curl" alone isn't an exercise, so it can also be added as a new one
     expect(d.getByRole('button', { name: 'Add “curl” as weights' })).toBeInTheDocument()
-    await user.click(d.getByRole('button', { name: 'Add Hammer Curl' }))
+    await user.click(d.getByRole('button', { name: 'Add Hammer Curl · Dumbbell' }))
     expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Hammer Curl')
   })
 
@@ -159,11 +168,15 @@ describe('App', () => {
     await user.click(await screen.findByRole('button', { name: 'Edit' }))
 
     const form = within(screen.getByRole('form', { name: 'Edit workout' }))
+    // Changing equipment keeps the workout's own numbers
+    await user.selectOptions(form.getByLabelText('Exercise 1 equipment'), 'cable')
+    expect(form.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('50')
     const reps = form.getByLabelText('Exercise 1 set 1 reps')
     await user.clear(reps)
     await user.type(reps, '12')
     await user.click(form.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('12×50 kg')).toBeInTheDocument()
+    expect(screen.getByText('Row · Cable')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText(/No workouts yet/)).toBeInTheDocument()
@@ -297,10 +310,10 @@ describe('App', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const user = userEvent.setup()
     render(<App />)
-    await addExercise(user, 'Barbell Curl')
+    await addExercise(user, 'Bicep Curl')
     await user.click(screen.getByRole('button', { name: 'Legs' }))
     expect(confirmSpy).toHaveBeenCalled()
-    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Barbell Curl')
+    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Bicep Curl')
   })
 
   it('creates, starts, edits and deletes a routine from the Routines tab', async () => {
@@ -316,15 +329,15 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: '+ Add exercises' }))
     // The list stays open in the routine editor so several can be added
     await user.click(dialog().getByRole('button', { name: 'Legs' }))
-    await user.click(dialog().getByRole('button', { name: 'Add Squat' }))
-    await user.click(dialog().getByRole('button', { name: 'Add Lunge' }))
-    expect(dialog().getByRole('button', { name: 'Add Lunge' })).toHaveTextContent('✓ Added')
+    await user.click(dialog().getByRole('button', { name: 'Add Squat · Barbell' }))
+    await user.click(dialog().getByRole('button', { name: 'Add Lunge · Dumbbell' }))
+    expect(dialog().getByRole('button', { name: 'Add Lunge · Dumbbell' })).toHaveTextContent('✓ Added')
     await user.click(dialog().getByRole('button', { name: 'Done' }))
-    await user.click(screen.getByRole('button', { name: 'Move Lunge up' }))
+    await user.click(screen.getByRole('button', { name: 'Move Lunge · Dumbbell up' }))
     await user.click(screen.getByRole('button', { name: 'Save routine' }))
 
     expect(await screen.findByRole('heading', { name: 'Leg day' })).toBeInTheDocument()
-    expect(screen.getByText('Lunge · Squat')).toBeInTheDocument()
+    expect(screen.getByText('Lunge · Dumbbell, Squat · Barbell')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Lunge')
@@ -333,9 +346,9 @@ describe('App', () => {
 
     await user.click(tab('Routines'))
     await user.click(screen.getByRole('button', { name: 'Edit' }))
-    await user.click(screen.getByRole('button', { name: 'Remove Lunge' }))
+    await user.click(screen.getByRole('button', { name: 'Remove Lunge · Dumbbell' }))
     await user.click(screen.getByRole('button', { name: 'Save routine' }))
-    expect(await screen.findByText('Squat')).toBeInTheDocument()
+    expect(await screen.findByText('Squat · Barbell')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText(/No routines yet/)).toBeInTheDocument()
@@ -353,5 +366,77 @@ describe('App', () => {
     await user.click(panel.getByRole('button', { name: 'Save routine' }))
     expect(await screen.findByText('Routine saved')).toBeInTheDocument()
     expect(await listRoutines()).toMatchObject([{ name: 'Pull', days: [4], exercises: [{ name: 'Row' }] }])
+  })
+
+  it('logs equipment per weights exercise and keeps numbers separate per equipment', async () => {
+    await saveWorkout(workout('2026-01-01', [{ name: 'Bench Press', sets: sets([5, 80]) }])) // old entry: barbell
+    await saveWorkout(workout('2026-01-02', [{ name: 'Bench Press', equipment: 'dumbbell', sets: sets([10, 30]) }]))
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Your own entries are listed per equipment
+    await user.click(await screen.findByRole('button', { name: '+ Add exercise' }))
+    await user.click(dialog().getByRole('button', { name: 'Yours' }))
+    expect(dialog().getByRole('button', { name: 'Add Bench Press · Barbell' })).toBeInTheDocument()
+    await user.click(dialog().getByRole('button', { name: 'Add Bench Press · Dumbbell' }))
+    expect(screen.getByLabelText('Exercise 1 equipment')).toHaveValue('dumbbell')
+    expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('30')
+    expect(screen.getByText('Weight (kg, each)')).toBeInTheDocument()
+
+    // Switching equipment on an untouched card loads that equipment's last numbers
+    await addExercise(user, 'Lateral Raise')
+    expect(screen.getByLabelText('Exercise 2 equipment')).toHaveValue('dumbbell')
+    await user.selectOptions(screen.getByLabelText('Exercise 1 equipment'), 'barbell')
+    expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('80')
+    await user.selectOptions(screen.getByLabelText('Exercise 2 equipment'), 'cable')
+    await user.type(screen.getByLabelText('Exercise 2 set 1 reps'), '12')
+    await user.type(screen.getByLabelText('Exercise 2 set 1 weight'), '10')
+    await user.click(screen.getByRole('button', { name: 'Save workout' }))
+    expect(await screen.findByText('Workout saved')).toBeInTheDocument()
+
+    await user.click(tab('History'))
+    expect(await screen.findByText('Lateral Raise · Cable')).toBeInTheDocument()
+    expect(screen.getAllByText('Bench Press · Barbell')).toHaveLength(2)
+
+    await user.click(tab('Progress'))
+    const picker = await screen.findByLabelText('Exercise')
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Bench Press · Barbell',
+      'Bench Press · Dumbbell',
+      'Lateral Raise · Cable',
+    ])
+  })
+
+  it('shows "added weight" for bodyweight exercises', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await addExercise(user, 'Pull-up')
+    expect(screen.getByLabelText('Exercise 1 equipment')).toHaveValue('bodyweight')
+    expect(screen.getByText('Added (kg)')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Exercise 1 set 1 reps'), '8')
+    await user.click(screen.getByRole('button', { name: '+ Add set' }))
+    await user.type(screen.getByLabelText('Exercise 1 set 2 weight'), '10')
+    await user.click(screen.getByRole('button', { name: 'Save workout' }))
+    await user.click(await screen.findByRole('button', { name: 'History' }))
+    expect(await screen.findByText('8 reps, 8 × +10 kg')).toBeInTheDocument()
+  })
+
+  it('sets equipment per exercise in the routine editor', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Routines' }))
+    await user.click(screen.getByRole('button', { name: '+ New routine' }))
+    await user.type(screen.getByLabelText('Routine name'), 'Pull')
+    await user.click(screen.getByRole('button', { name: '+ Add exercises' }))
+    await user.type(dialog().getByLabelText('Search exercises'), 'face pull')
+    await user.click(dialog().getByRole('button', { name: 'Add Face Pull · Cable' }))
+    await user.click(dialog().getByRole('button', { name: 'Done' }))
+    await user.selectOptions(screen.getByLabelText('Face Pull equipment'), 'band')
+    await user.click(screen.getByRole('button', { name: 'Save routine' }))
+    expect(await listRoutines()).toMatchObject([
+      { name: 'Pull', exercises: [{ name: 'Face Pull', kind: 'strength', equipment: 'band' }] },
+    ])
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByLabelText('Exercise 1 equipment')).toHaveValue('band')
   })
 })

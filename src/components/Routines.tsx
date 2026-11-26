@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { todayLocal } from '../lib/id'
+import { exerciseLabel } from '../lib/equipment'
 import { formatDays, sortRoutines, weekdayOf } from '../lib/routines'
 import type { CatalogItem } from '../lib/stats'
 import type { Routine, RoutineInput } from '../lib/types'
@@ -56,7 +57,7 @@ export function Routines({ routines, catalog, onStart, onSave, onDelete }: Props
                   {r.days.includes(today) ? `Today · ${formatDays(r.days)}` : formatDays(r.days)}
                 </span>
               </div>
-              <p className="muted">{r.exercises.map((e) => e.name).join(' · ')}</p>
+              <p className="muted">{r.exercises.map((e) => exerciseLabel(e.name, e.equipment)).join(', ')}</p>
               <div className="actions">
                 <button
                   type="button"

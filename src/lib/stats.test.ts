@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cardioProgressFor,
   cardioRecords,
+  equipmentOf,
   estimateOneRepMax,
   exerciseCatalog,
   exerciseKey,
@@ -53,8 +54,8 @@ describe('exerciseCatalog', () => {
       ]),
     ]
     expect(exerciseCatalog(ws)).toEqual([
-      { name: 'Bench Press', kind: 'strength' },
-      { name: 'Deadlift', kind: 'strength' },
+      { name: 'Bench Press', kind: 'strength', equipment: 'barbell' },
+      { name: 'Deadlift', kind: 'strength', equipment: 'barbell' },
       { name: 'Run', kind: 'cardio' },
     ])
   })
@@ -163,5 +164,43 @@ describe('cardio', () => {
     const mixed = [workout('2026-01-01', [cardio('Row', 600, 2) as CardioEntry, { name: 'Row', sets: sets([10, 50]) }])]
     expect(progressFor(mixed, 'Row')).toHaveLength(1)
     expect(personalRecords(mixed, 'Row').heaviest?.weightKg).toBe(50)
+  })
+})
+
+describe('equipment', () => {
+  const ws = [
+    workout('2026-01-01', [{ name: 'Bench Press', sets: sets([5, 80]) }]), // saved before equipment: barbell
+    workout('2026-01-02', [{ name: 'Bench Press', equipment: 'dumbbell', sets: sets([10, 30]) }]),
+    workout('2026-01-03', [{ name: 'Bench Press', equipment: 'barbell', sets: sets([5, 85]) }]),
+    workout('2026-01-04', [{ name: 'Sled Push', sets: sets([1, 100]) }]), // no default equipment
+  ]
+
+  it('treats old entries as the default equipment for the name', () => {
+    expect(equipmentOf({ name: 'Lateral Raise', sets: [] })).toBe('dumbbell')
+    expect(equipmentOf({ name: 'Lateral Raise', equipment: 'cable', sets: [] })).toBe('cable')
+    expect(equipmentOf({ name: 'Sled Push', sets: [] })).toBeUndefined()
+  })
+
+  it('keeps progress and records separate per equipment', () => {
+    expect(progressFor(ws, 'Bench Press').map((p) => p.topWeightKg)).toEqual([80, 85])
+    expect(progressFor(ws, 'Bench Press', 'barbell').map((p) => p.topWeightKg)).toEqual([80, 85])
+    expect(progressFor(ws, 'Bench Press', 'dumbbell').map((p) => p.topWeightKg)).toEqual([30])
+    expect(personalRecords(ws, 'Bench Press', 'dumbbell').heaviest?.weightKg).toBe(30)
+    expect(progressFor(ws, 'Sled Push')).toHaveLength(1)
+  })
+
+  it('pre-fills from the matching equipment, or the latest on any equipment', () => {
+    expect((lastEntryFor(ws, 'Bench Press', 'dumbbell') as StrengthEntry).sets[0].weightKg).toBe(30)
+    expect((lastEntryFor(ws, 'Bench Press', 'barbell') as StrengthEntry).sets[0].weightKg).toBe(85)
+    expect((lastEntryFor(ws, 'Bench Press') as StrengthEntry).sets[0].weightKg).toBe(85)
+    expect(lastEntryFor(ws, 'Bench Press', 'cable')).toBeUndefined()
+  })
+
+  it('lists each equipment as its own catalog entry', () => {
+    expect(exerciseCatalog(ws).map((c) => `${c.name}/${c.equipment ?? '-'}`)).toEqual([
+      'Bench Press/barbell',
+      'Bench Press/dumbbell',
+      'Sled Push/-',
+    ])
   })
 })

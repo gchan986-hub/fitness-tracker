@@ -1,8 +1,9 @@
 import { useEffect, useId, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { newId, todayLocal } from '../lib/id'
 import { dedupeExercises, sortRoutines, weekdayOf } from '../lib/routines'
-import { exerciseKey, isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
-import type { ExerciseEntry, ExerciseKind, Routine, RoutineExercise, RoutineInput, Units, Workout } from '../lib/types'
+import { EQUIPMENT, isEquipment } from '../lib/equipment'
+import { catalogKey, equipmentOf, exerciseKey, isCardio, kindOf, lastEntryFor, type CatalogItem } from '../lib/stats'
+import type { Equipment, ExerciseEntry, ExerciseKind, Routine, RoutineExercise, RoutineInput, Units, Workout } from '../lib/types'
 import { formatPace, fromKg, fromKm, toKg, toKm } from '../lib/units'
 import { validateWorkout } from '../lib/validate'
 import { ExercisePicker } from './ExercisePicker'
@@ -17,6 +18,10 @@ interface ExerciseDraft {
   key: string
   kind: ExerciseKind
   name: string
+  /** Weights only. */
+  equipment?: Equipment
+  /** True once you've typed numbers in this card; until then it may be re-filled from history. */
+  edited?: boolean
   sets: SetDraft[]
   distance: string
   minutes: string
@@ -38,7 +43,7 @@ const round = (n: number, dp = 1) => String(Math.round(n * 10 ** dp) / 10 ** dp)
 const num = (s: string) => (s.trim() === '' ? NaN : Number(s.trim().replace(',', '.')))
 
 function entryToDraft(ex: ExerciseEntry, units: Units): ExerciseDraft {
-  const base = { ...blankExercise(kindOf(ex)), name: ex.name }
+  const base: ExerciseDraft = { ...blankExercise(kindOf(ex)), name: ex.name }
   if (isCardio(ex)) {
     return {
       ...base,
@@ -49,8 +54,16 @@ function entryToDraft(ex: ExerciseEntry, units: Units): ExerciseDraft {
   }
   return {
     ...base,
+    equipment: equipmentOf(ex),
     sets: ex.sets.map((s) => ({ key: newId(), reps: String(s.reps), weight: round(fromKg(s.weightKg, units.weight)) })),
   }
+}
+
+/** Weight column heading: dumbbells are logged per dumbbell, bodyweight as added weight. */
+function weightHeading(equipment: Equipment | undefined, unit: string): string {
+  if (equipment === 'dumbbell') return `Weight (${unit}, each)`
+  if (equipment === 'bodyweight') return `Added (${unit})`
+  return `Weight (${unit})`
 }
 
 /** Minutes + seconds fields to seconds; NaN if both blank or invalid. */
@@ -74,6 +87,7 @@ function draftToEntry(d: ExerciseDraft, units: Units): ExerciseEntry {
   }
   return {
     name,
+    ...(d.equipment ? { equipment: d.equipment } : {}),
     sets: d.sets.map((s) => ({
       reps: num(s.reps),
       weightKg: s.weight.trim() === '' ? 0 : toKg(num(s.weight), units.weight),
@@ -81,8 +95,8 @@ function draftToEntry(d: ExerciseDraft, units: Units): ExerciseEntry {
   }
 }
 
-const isUntouched = (d: ExerciseDraft) =>
-  d.sets.every((s) => !s.reps && !s.weight) && !d.distance && !d.minutes && !d.seconds
+/** No numbers typed by you (numbers filled in from last time don't count). */
+const isUntouched = (d: ExerciseDraft) => !d.edited
 
 export interface WorkoutFormHandle {
   /** Replaces the form's exercises with a routine's (asks first if something has been entered). */
@@ -107,7 +121,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   const [date, setDate] = useState(editing?.date ?? todayLocal())
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [exercises, setExercises] = useState<ExerciseDraft[]>(
-    editing ? editing.exercises.map((ex) => entryToDraft(ex, units)) : [],
+    editing ? editing.exercises.map((ex) => ({ ...entryToDraft(ex, units), edited: true })) : [],
   )
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -118,9 +132,18 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
 
   /** A card for a routine/catalog exercise, filled in with last session's numbers when the type matches. */
   const draftFor = (rx: RoutineExercise): ExerciseDraft => {
-    const last = lastEntryFor(history, rx.name)
-    if (last && kindOf(last) === rx.kind) return { ...entryToDraft(last, units), name: rx.name }
-    return { ...blankExercise(rx.kind), name: rx.name }
+    const equipment = rx.kind === 'strength' ? rx.equipment : undefined
+    const last = lastEntryFor(history, rx.name, equipment)
+    if (last && kindOf(last) === rx.kind) return { ...entryToDraft(last, units), name: rx.name, equipment }
+    return { ...blankExercise(rx.kind), name: rx.name, equipment }
+  }
+
+  /** Changing equipment on a card with no numbers yet fills in what you last did on that equipment. */
+  const changeEquipment = (ex: ExerciseDraft, equipment: Equipment | undefined) => {
+    const last = isUntouched(ex) && ex.name.trim() && equipment ? lastEntryFor(history, ex.name, equipment) : undefined
+    updateExercise(ex.key, (e) =>
+      last && !isCardio(last) ? { ...entryToDraft(last, units), key: e.key, name: e.name, equipment } : { ...e, equipment },
+    )
   }
 
   const loadRoutine = (r: Routine) => {
@@ -150,13 +173,17 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
   }
 
   const namedExercises = (): RoutineExercise[] =>
-    dedupeExercises(exercises.map((x) => ({ name: x.name, kind: x.kind })))
+    dedupeExercises(exercises.map((x) => ({ name: x.name, kind: x.kind, equipment: x.equipment })))
 
   const updateExercise = (key: string, fn: (e: ExerciseDraft) => ExerciseDraft) =>
     setExercises((xs) => xs.map((x) => (x.key === key ? fn(x) : x)))
 
   const updateSet = (exKey: string, setKey: string, patch: Partial<SetDraft>) =>
-    updateExercise(exKey, (x) => ({ ...x, sets: x.sets.map((y) => (y.key === setKey ? { ...y, ...patch } : y)) }))
+    updateExercise(exKey, (x) => ({
+      ...x,
+      edited: true,
+      sets: x.sets.map((y) => (y.key === setKey ? { ...y, ...patch } : y)),
+    }))
 
   /**
    * When a known exercise is entered into an empty card, switch to its type and pre-fill last time's numbers.
@@ -169,7 +196,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
     if (!last) {
       // Never logged: just match the type of a known exercise (e.g. "Swim" switches to cardio).
       const known = catalog.find((c) => exerciseKey(c.name) === exerciseKey(ex.name))
-      if (known && known.kind !== ex.kind) updateExercise(ex.key, (e) => ({ ...e, kind: known.kind }))
+      if (known) updateExercise(ex.key, (e) => ({ ...e, kind: known.kind, equipment: known.equipment }))
       return
     }
     const el = nextFocus instanceof HTMLElement ? nextFocus : null
@@ -261,8 +288,8 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
       )}
 
       <datalist id={listId}>
-        {catalog.map((c) => (
-          <option key={c.name} value={c.name} />
+        {[...new Set(catalog.map((c) => c.name))].map((name) => (
+          <option key={name} value={name} />
         ))}
       </datalist>
 
@@ -306,6 +333,23 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
               </button>
             </div>
 
+            {ex.kind === 'strength' && (
+              <label className="equipment-field">
+                <span>Equipment</span>
+                <select
+                  aria-label={`Exercise ${n} equipment`}
+                  value={ex.equipment ?? ''}
+                  onChange={(e) => changeEquipment(ex, isEquipment(e.target.value) ? e.target.value : undefined)}
+                >
+                  <option value="">Not set</option>
+                  {EQUIPMENT.map((q) => (
+                    <option key={q.value} value={q.value}>
+                      {q.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {ex.kind === 'cardio' ? (
               <>
                 <div className="cardio-row set-head" aria-hidden>
@@ -320,14 +364,14 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                     inputMode="decimal"
                     placeholder="optional"
                     value={ex.distance}
-                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, distance: e.target.value }))}
+                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, edited: true, distance: e.target.value }))}
                   />
                   <input
                     aria-label={`Exercise ${n} minutes`}
                     data-field="minutes"
                     inputMode="numeric"
                     value={ex.minutes}
-                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, minutes: e.target.value }))}
+                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, edited: true, minutes: e.target.value }))}
                   />
                   <input
                     aria-label={`Exercise ${n} seconds`}
@@ -335,7 +379,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                     inputMode="numeric"
                     placeholder="0"
                     value={ex.seconds}
-                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, seconds: e.target.value }))}
+                    onChange={(e) => updateExercise(ex.key, (x) => ({ ...x, edited: true, seconds: e.target.value }))}
                   />
                 </div>
                 {pace && <p className="muted pace">Pace {pace}</p>}
@@ -346,7 +390,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                   <div className="set-row set-head" aria-hidden>
                     <span>Set</span>
                     <span>Reps</span>
-                    <span>Weight ({units.weight})</span>
+                    <span>{weightHeading(ex.equipment, units.weight)}</span>
                     <span />
                   </div>
                   {ex.sets.map((s, j) => (
@@ -373,7 +417,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
                         aria-label={`Remove exercise ${n} set ${j + 1}`}
                         disabled={ex.sets.length === 1}
                         onClick={() =>
-                          updateExercise(ex.key, (x) => ({ ...x, sets: x.sets.filter((y) => y.key !== s.key) }))
+                          updateExercise(ex.key, (x) => ({ ...x, edited: true, sets: x.sets.filter((y) => y.key !== s.key) }))
                         }
                       >
                         ✕
@@ -411,7 +455,7 @@ export function WorkoutForm({ units, history, catalog, routines, editing, onSave
         <ExercisePicker
           title="Add exercise"
           catalog={catalog}
-          selected={exercises.map((x) => x.name)}
+          selected={exercises.map(catalogKey)}
           onPick={addFromCatalog}
           onClose={() => setPicking(false)}
         />

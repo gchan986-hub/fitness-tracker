@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { formatDate } from '../lib/id'
-import { cardioProgressFor, cardioRecords, personalRecords, progressFor, type CatalogItem } from '../lib/stats'
-import type { Units, Workout } from '../lib/types'
+import { exerciseLabel } from '../lib/equipment'
+import { cardioProgressFor, cardioRecords, catalogKey, personalRecords, progressFor, type CatalogItem } from '../lib/stats'
+import type { Equipment, Units, Workout } from '../lib/types'
 import { formatDistance, formatDuration, formatPace, formatWeight, fromKg, fromKm, paceInUnit } from '../lib/units'
 
 interface Row {
@@ -26,12 +27,17 @@ interface RecordItem {
 
 const r = (n: number, dp: number) => Math.round(n * 10 ** dp) / 10 ** dp
 
-function strengthView(workouts: Workout[], name: string, units: Units): { metrics: Metric[]; records: RecordItem[] } {
-  const pts = progressFor(workouts, name)
+function strengthView(
+  workouts: Workout[],
+  name: string,
+  equipment: Equipment | undefined,
+  units: Units,
+): { metrics: Metric[]; records: RecordItem[] } {
+  const pts = progressFor(workouts, name, equipment)
   const w = units.weight
   const rows = (k: 'est1RmKg' | 'topWeightKg' | 'volumeKg') => pts.map((p) => ({ date: p.date, value: r(fromKg(p[k], w), 1) }))
   const fmt = (v: number) => `${v} ${w}`
-  const prs = personalRecords(workouts, name)
+  const prs = personalRecords(workouts, name, equipment)
   return {
     metrics: [
       { id: 'e1rm', label: 'Estimated 1-rep max', rows: rows('est1RmKg'), fmt },
@@ -125,8 +131,12 @@ export function Progress({ workouts, catalog, units }: Props) {
   if (catalog.length === 0) {
     return <p className="empty">Log a workout to see progress charts here.</p>
   }
-  const item = catalog.find((c) => c.name === picked) ?? catalog[0]
-  const view = item.kind === 'cardio' ? cardioView(workouts, item.name, units) : strengthView(workouts, item.name, units)
+  const item = catalog.find((c) => catalogKey(c) === picked) ?? catalog[0]
+  const label = exerciseLabel(item.name, item.equipment)
+  const view =
+    item.kind === 'cardio'
+      ? cardioView(workouts, item.name, units)
+      : strengthView(workouts, item.name, item.equipment, units)
   const metric = view.metrics.find((m) => m.id === metricId) ?? view.metrics[0]
   const data = metric.rows
 
@@ -136,9 +146,11 @@ export function Progress({ workouts, catalog, units }: Props) {
       <div className="controls">
         <label className="field">
           Exercise
-          <select value={item.name} onChange={(e) => setPicked(e.target.value)}>
+          <select value={catalogKey(item)} onChange={(e) => setPicked(e.target.value)}>
             {catalog.map((c) => (
-              <option key={c.name}>{c.name}</option>
+              <option key={catalogKey(c)} value={catalogKey(c)}>
+                {exerciseLabel(c.name, c.equipment)}
+              </option>
             ))}
           </select>
         </label>
@@ -154,10 +166,10 @@ export function Progress({ workouts, catalog, units }: Props) {
         </label>
       </div>
 
-      <div className="card chart" aria-label={`${item.name} progress chart`}>
+      <div className="card chart" aria-label={`${label} progress chart`}>
         {data.length < 2 ? (
           <p className="muted">
-            Log {item.name}
+            Log {label}
             {metric.id === 'distance' || metric.id === 'pace' ? ' with a distance' : ''} on at least two different days
             to see a trend.
           </p>

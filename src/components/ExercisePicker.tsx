@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_GROUPS } from '../lib/defaultExercises'
-import { exerciseKey, type CatalogItem } from '../lib/stats'
+import { equipmentLabel, exerciseLabel } from '../lib/equipment'
+import { catalogKey, exerciseKey, type CatalogItem } from '../lib/stats'
 import type { ExerciseKind } from '../lib/types'
 
 interface Props {
   catalog: CatalogItem[]
-  /** Names already chosen; shown with a check mark. */
+  /** Catalog keys (see catalogKey) already chosen; shown with a check mark. */
   selected: string[]
   onPick: (item: CatalogItem) => void
   onClose: () => void
@@ -13,7 +14,8 @@ interface Props {
   title: string
 }
 
-const KIND_LABEL: Record<ExerciseKind, string> = { strength: 'Weights', cardio: 'Cardio' }
+const tagFor = (c: CatalogItem) =>
+  c.kind === 'cardio' ? 'Cardio' : c.equipment ? equipmentLabel(c.equipment) : 'Weights'
 const ALL = 'All'
 const YOURS = 'Yours'
 
@@ -29,7 +31,7 @@ export function ExercisePicker({ catalog, selected, onPick, onClose, title }: Pr
   }, [onClose])
 
   const key = exerciseKey(query)
-  const chosen = new Set(selected.map(exerciseKey))
+  const chosen = new Set(selected)
   const hasOwn = catalog.some((c) => c.own)
   const tabs = [ALL, ...(hasOwn ? [YOURS] : []), ...DEFAULT_GROUPS]
   const inTab = (c: CatalogItem) => filter === ALL || (filter === YOURS ? c.own : c.group === filter)
@@ -84,14 +86,16 @@ export function ExercisePicker({ catalog, selected, onPick, onClose, title }: Pr
               <h3 className="picker-group">{heading}</h3>
               <ul>
                 {items.map((c) => {
-                  const isChosen = chosen.has(exerciseKey(c.name))
+                  const isChosen = chosen.has(catalogKey(c))
                   return (
-                    <li key={c.name}>
-                      <button type="button" aria-label={`Add ${c.name}`} onClick={() => onPick(c)}>
+                    <li key={catalogKey(c)}>
+                      <button
+                        type="button"
+                        aria-label={`Add ${exerciseLabel(c.name, c.kind === 'strength' ? c.equipment : undefined)}`}
+                        onClick={() => onPick(c)}
+                      >
                         <span>{c.name}</span>
-                        <span className={isChosen ? 'tag added' : 'tag'}>
-                          {isChosen ? '✓ Added' : KIND_LABEL[c.kind]}
-                        </span>
+                        <span className={isChosen ? 'tag added' : 'tag'}>{isChosen ? '✓ Added' : tagFor(c)}</span>
                       </button>
                     </li>
                   )

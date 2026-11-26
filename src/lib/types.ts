@@ -4,11 +4,24 @@ export interface WorkoutSet {
   weightKg: number
 }
 
+export type Equipment =
+  | 'barbell'
+  | 'dumbbell'
+  | 'machine'
+  | 'plate'
+  | 'cable'
+  | 'kettlebell'
+  | 'smith'
+  | 'bodyweight'
+  | 'band'
+
 /** Weights exercise. `kind` is absent on entries saved before cardio existed. */
 export interface StrengthEntry {
   kind?: 'strength'
   /** Exercise name as typed, e.g. "Bench Press". Matched case-insensitively. */
   name: string
+  /** Absent on entries saved before equipment existed; the built-in default for the name is assumed. */
+  equipment?: Equipment
   sets: WorkoutSet[]
 }
 
@@ -38,6 +51,7 @@ export interface Workout {
 export interface RoutineExercise {
   name: string
   kind: ExerciseKind
+  equipment?: Equipment
 }
 
 /** A saved group of exercises (no numbers: loading one fills in last session's numbers). */

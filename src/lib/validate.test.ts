@@ -42,6 +42,8 @@ describe('isWorkout', () => {
   it('accepts cardio entries and old entries without a kind', () => {
     expect(isWorkout(workout('2026-01-01', [cardio('Run', 1500, 5), { name: 'Row', sets: sets([5, 50]) }]))).toBe(true)
     expect(isWorkout(workout('2026-01-01', [{ kind: 'cardio', name: 'Run' } as never]))).toBe(false)
+    expect(isWorkout(workout('2026-01-01', [{ name: 'Row', equipment: 'cable', sets: sets([5, 50]) }]))).toBe(true)
+    expect(isWorkout(workout('2026-01-01', [{ name: 'Row', equipment: 'spoon' as never, sets: [] }]))).toBe(false)
   })
   it('accepts a workout and rejects junk', () => {
     expect(isWorkout(workout('2026-01-01', [{ name: 'Row', sets: sets([5, 50]) }]))).toBe(true)

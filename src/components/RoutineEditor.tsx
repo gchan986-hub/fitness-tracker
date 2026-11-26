@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { EQUIPMENT, exerciseLabel, isEquipment } from '../lib/equipment'
 import { dedupeExercises, validateRoutine } from '../lib/routines'
-import type { CatalogItem } from '../lib/stats'
+import { catalogKey, type CatalogItem } from '../lib/stats'
 import type { Routine, RoutineExercise, RoutineInput } from '../lib/types'
 import { DayPicker } from './DayPicker'
 import { ExercisePicker } from './ExercisePicker'
@@ -48,35 +49,64 @@ export function RoutineEditor({ routine, catalog, onSave, onCancel }: Props) {
         <p className="muted">No exercises yet. Add some from the list below.</p>
       ) : (
         <ol className="routine-exercises">
-          {exercises.map((ex, i) => (
-            <li key={ex.name} className="card">
-              <span>
-                {ex.name} <span className="tag">{ex.kind === 'cardio' ? 'Cardio' : 'Weights'}</span>
-              </span>
-              <span className="row-actions">
-                <button type="button" className="icon-btn" aria-label={`Move ${ex.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label={`Move ${ex.name} down`}
-                  disabled={i === exercises.length - 1}
-                  onClick={() => move(i, 1)}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label={`Remove ${ex.name}`}
-                  onClick={() => setExercises((xs) => xs.filter((_, j) => j !== i))}
-                >
-                  ✕
-                </button>
-              </span>
-            </li>
-          ))}
+          {exercises.map((ex, i) => {
+            const label = exerciseLabel(ex.name, ex.equipment)
+            return (
+              <li key={catalogKey(ex)} className="card">
+                <span className="routine-ex-name">
+                  {ex.name}
+                  {ex.kind === 'cardio' ? (
+                    <span className="tag">Cardio</span>
+                  ) : (
+                    <select
+                      className="equipment-mini"
+                      aria-label={`${ex.name} equipment`}
+                      value={ex.equipment ?? ''}
+                      onChange={(e) => {
+                        const equipment = isEquipment(e.target.value) ? e.target.value : undefined
+                        setExercises((xs) => dedupeExercises(xs.map((x, j) => (j === i ? { ...x, equipment } : x))))
+                      }}
+                    >
+                      <option value="">Equipment not set</option>
+                      {EQUIPMENT.map((q) => (
+                        <option key={q.value} value={q.value}>
+                          {q.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </span>
+                <span className="row-actions">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Move ${label} up`}
+                    disabled={i === 0}
+                    onClick={() => move(i, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Move ${label} down`}
+                    disabled={i === exercises.length - 1}
+                    onClick={() => move(i, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Remove ${label}`}
+                    onClick={() => setExercises((xs) => xs.filter((_, j) => j !== i))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              </li>
+            )
+          })}
         </ol>
       )}
 
@@ -87,7 +117,7 @@ export function RoutineEditor({ routine, catalog, onSave, onCancel }: Props) {
         <ExercisePicker
           title="Add exercises"
           catalog={catalog}
-          selected={exercises.map((e) => e.name)}
+          selected={exercises.map(catalogKey)}
           onPick={(item) => setExercises((xs) => dedupeExercises([...xs, item]))}
           onClose={() => setPicking(false)}
         />
