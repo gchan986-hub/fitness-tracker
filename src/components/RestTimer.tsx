@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { restOverAlert, type RestState } from '../lib/rest'
+import { countdownPip, restOverAlert, type RestState } from '../lib/rest'
 import { formatDuration } from '../lib/units'
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
 export function RestTimer({ rest, sound, onAdjust, onDismiss }: Props) {
   const [now, setNow] = useState(() => Date.now())
   const alertedFor = useRef<number | null>(null)
+  const pippedAt = useRef<string | null>(null)
+  const repeats = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 250)
@@ -22,13 +24,24 @@ export function RestTimer({ rest, sound, onAdjust, onDismiss }: Props) {
   const remaining = Math.max(0, Math.ceil((rest.endAt - now) / 1000))
   const over = remaining === 0
 
-  // Alert once per rest period.
+  // 3-2-1 pips before the end (skipped for very short rests).
   useEffect(() => {
-    if (over && alertedFor.current !== rest.endAt) {
-      alertedFor.current = rest.endAt
-      restOverAlert(sound)
+    const id = `${rest.endAt}:${remaining}`
+    if (remaining >= 1 && remaining <= 3 && rest.totalSec > 5 && pippedAt.current !== id) {
+      pippedAt.current = id
+      countdownPip(sound)
     }
+  }, [remaining, rest.endAt, rest.totalSec, sound])
+
+  // Alert once per rest period, then repeat twice (sound only) unless dismissed.
+  useEffect(() => {
+    if (!over || alertedFor.current === rest.endAt) return
+    alertedFor.current = rest.endAt
+    repeats.current.forEach(clearTimeout)
+    restOverAlert(sound)
+    repeats.current = [2000, 4000].map((ms) => setTimeout(() => restOverAlert(sound, false), ms))
   }, [over, rest.endAt, sound])
+  useEffect(() => () => repeats.current.forEach(clearTimeout), [])
 
   // Hide the "rest over" message after a while.
   useEffect(() => {

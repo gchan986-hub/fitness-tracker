@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { clearProfile, clearRoutines, clearWorkouts, exportBackup, importBackup } from '../lib/db'
 import { todayLocal } from '../lib/id'
-import { REST_OPTIONS } from '../lib/rest'
+import { REST_OPTIONS, testRestAlert } from '../lib/rest'
 import { formatDuration } from '../lib/units'
 import type { BodyWeight, Profile, Units } from '../lib/types'
 import { ProfileCard } from './ProfileCard'
@@ -138,13 +138,22 @@ export function Settings({
             ))}
           </select>
         </label>
-        <label className="radio">
-          <input type="checkbox" checked={restSound} onChange={(e) => onRestSoundChange(e.target.checked)} /> Beep when
-          rest is over
-        </label>
+        <div className="sound-row">
+          <label className="radio">
+            <input type="checkbox" checked={restSound} onChange={(e) => onRestSoundChange(e.target.checked)} /> Beep
+            when rest is over
+          </label>
+          <button type="button" className="secondary" onClick={testRestAlert}>
+            Test sound
+          </button>
+        </div>
         <p className="muted">
-          Tap ✓ on a set to start the timer. On iPhone the beep is silent when the ring/silent switch is on, and the
-          app has to be open.
+          Tap ✓ on a set to start the timer. You'll hear pips in the last 3 seconds, then the alert (repeated twice).
+        </p>
+        <p className="muted">
+          <strong>Can't hear it on iPhone?</strong> Turn off silent mode (the switch or Action button on the side). The
+          beep uses the <em>media</em> volume, not the ringer: tap Test sound and press volume up while it plays. With
+          headphones in, it plays through them. The app has to be open on screen.
         </p>
       </fieldset>
       <div className="card">

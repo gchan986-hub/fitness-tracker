@@ -173,3 +173,4 @@ button:disabled { opacity: 0.5; cursor: default; }
 .ft-in { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
 .weigh-ins { list-style: none; padding: 0; margin: 0.75rem 0 0; }
 .weigh-ins li { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; gap: 0.5rem; padding: 0.15rem 0; border-top: 1px solid var(--border); font-size: 0.95rem; }
+.sound-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

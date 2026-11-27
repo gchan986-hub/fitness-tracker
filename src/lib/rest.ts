@@ -67,28 +67,75 @@ export function unlockAudio(): void {
   }
 }
 
-/** Three short beeps (if sound is on) and a vibration where supported. */
-export function restOverAlert(sound: boolean): void {
-  try {
-    navigator.vibrate?.([250, 120, 250])
-  } catch {
-    /* not supported */
+interface Tone {
+  freq: number
+  /** Seconds from now. */
+  at: number
+  dur: number
+}
+
+/**
+ * Plays tones as a square wave at high pitch through a compressor: much louder on a phone speaker than a soft
+ * sine beep, without distorting.
+ */
+function playTones(tones: Tone[], level = 0.9): void {
+  if (!audio) return
+  if (audio.state === 'suspended') void audio.resume()
+  const t0 = audio.currentTime + 0.01
+  const out = audio.createDynamicsCompressor()
+  out.threshold.value = -12
+  out.ratio.value = 6
+  out.connect(audio.destination)
+  for (const tone of tones) {
+    const osc = audio.createOscillator()
+    const gain = audio.createGain()
+    osc.type = 'square'
+    osc.frequency.value = tone.freq
+    const start = t0 + tone.at
+    const end = start + tone.dur
+    gain.gain.setValueAtTime(0.0001, start)
+    gain.gain.exponentialRampToValueAtTime(level, start + 0.01)
+    gain.gain.setValueAtTime(level, end - 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, end)
+    osc.connect(gain).connect(out)
+    osc.start(start)
+    osc.stop(end + 0.02)
   }
-  if (!sound || !audio) return
-  try {
-    const t = audio.currentTime
-    for (let i = 0; i < 3; i++) {
-      const osc = audio.createOscillator()
-      const gain = audio.createGain()
-      osc.frequency.value = 880
-      gain.gain.setValueAtTime(0.0001, t + i * 0.3)
-      gain.gain.exponentialRampToValueAtTime(0.4, t + i * 0.3 + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.3 + 0.2)
-      osc.connect(gain).connect(audio.destination)
-      osc.start(t + i * 0.3)
-      osc.stop(t + i * 0.3 + 0.22)
+}
+
+/** "Rest over": beep-beep-BEEEP (about 1 s), plus a vibration where supported. */
+export function restOverAlert(sound: boolean, vibrate = true): void {
+  if (vibrate) {
+    try {
+      navigator.vibrate?.([300, 150, 300, 150, 500])
+    } catch {
+      /* not supported */
     }
+  }
+  if (!sound) return
+  try {
+    playTones([
+      { freq: 2093, at: 0, dur: 0.15 },
+      { freq: 2093, at: 0.25, dur: 0.15 },
+      { freq: 2637, at: 0.5, dur: 0.45 },
+    ])
   } catch {
     /* no sound available */
   }
+}
+
+/** Short pip for the last 3 seconds of rest. */
+export function countdownPip(sound: boolean): void {
+  if (!sound) return
+  try {
+    playTones([{ freq: 1568, at: 0, dur: 0.08 }], 0.6)
+  } catch {
+    /* no sound available */
+  }
+}
+
+/** For the Settings "Test sound" button (a tap, so it can also unlock audio on iPhone). */
+export function testRestAlert(): void {
+  unlockAudio()
+  restOverAlert(true)
 }
