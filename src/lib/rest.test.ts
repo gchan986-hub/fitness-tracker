@@ -6,13 +6,17 @@ beforeEach(() => localStorage.clear())
 describe('rest settings', () => {
   it('defaults to 90 seconds with sound on', () => {
     expect(readRestSec()).toBe(DEFAULT_REST_SEC)
-    expect(readRestSound()).toBe(true)
+    expect(readRestSound()).toBe('soft')
   })
   it('remembers choices and ignores junk', () => {
     saveRestSec(120)
-    saveRestSound(false)
+    saveRestSound('loud')
     expect(readRestSec()).toBe(120)
-    expect(readRestSound()).toBe(false)
+    expect(readRestSound()).toBe('loud')
+    localStorage.setItem('fitness-tracker:rest-sound', 'on') // saved by an older version
+    expect(readRestSound()).toBe('soft')
+    localStorage.setItem('fitness-tracker:rest-sound', 'off')
+    expect(readRestSound()).toBe('off')
     localStorage.setItem('fitness-tracker:rest-sec', '7')
     expect(readRestSec()).toBe(DEFAULT_REST_SEC)
   })

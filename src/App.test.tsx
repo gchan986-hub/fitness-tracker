@@ -529,9 +529,7 @@ describe('App', () => {
       render(<App />)
       await user.click(await screen.findByRole('button', { name: 'Settings' }))
       await user.selectOptions(screen.getByLabelText('Rest between sets'), '60')
-      await user.click(screen.getByRole('checkbox', { name: /Beep when rest is over/ }))
       expect(localStorage.getItem('fitness-tracker:rest-sec')).toBe('60')
-      expect(localStorage.getItem('fitness-tracker:rest-sound')).toBe('off')
       await user.click(tab('Log'))
       await addExercise(user, 'Run')
       expect(screen.queryByRole('button', { name: /done$/ })).not.toBeInTheDocument() // no ✓ on cardio
@@ -816,50 +814,86 @@ describe('App', () => {
       for (let t = 0; t < ms; t += 1000) await act(() => vi.advanceTimersByTime(Math.min(1000, ms - t)))
     }
 
-    it('pips 3-2-1, then plays a loud alert that repeats twice', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      render(<App />)
+    const startRest = async (user: User) => {
       await addExercise(user, 'Squat')
       await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+    }
+
+    it('plays a quiet ding-dong by default, once, after soft 3-2-1 pips', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await startRest(user)
       await advance(86_000)
       expect(tones).toEqual([])
       await advance(3_000) // 3, 2, 1
-      expect(tones.map((t) => t.freq)).toEqual([1047, 1047, 1047])
+      expect(tones).toEqual([
+        { freq: 659, type: 'sine' },
+        { freq: 659, type: 'sine' },
+        { freq: 659, type: 'sine' },
+      ])
       await advance(1_000) // rest over
-      expect(tones.slice(3).map((t) => t.freq)).toEqual([1319, 1568, 2093])
-      expect(tones.every((t) => t.type === 'triangle')).toBe(true)
+      expect(tones.slice(3)).toEqual([
+        { freq: 880, type: 'sine' },
+        { freq: 659, type: 'sine' },
+      ])
+      await advance(15_000)
+      expect(tones).toHaveLength(5) // no repeats
+    })
+
+    it('Loud plays the brighter chime and repeats twice unless dismissed', async () => {
+      localStorage.setItem('fitness-tracker:rest-sound', 'loud')
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await startRest(user)
+      await advance(90_000)
+      expect(tones.map((t) => t.freq)).toEqual([1047, 1047, 1047, 1319, 1568, 2093])
+      expect(tones.slice(3).every((t) => t.type === 'triangle')).toBe(true)
       await advance(4_500)
       expect(tones).toHaveLength(3 + 9)
       await advance(10_000)
-      expect(tones).toHaveLength(3 + 9) // no more after the two repeats
-    })
+      expect(tones).toHaveLength(3 + 9)
 
-    it('stops repeating when dismissed, and stays quiet with sound off', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      render(<App />)
-      await addExercise(user, 'Squat')
-      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
-      await advance(90_500)
+      // A new rest, dismissed straight away: the repeats are cancelled
+      tones = []
+      await user.click(screen.getByRole('button', { name: '+ Add set' }))
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 2 done' }))
+      await advance(91_000)
       expect(tones).toHaveLength(6)
       await user.click(screen.getByRole('button', { name: 'Dismiss' }))
       await advance(5_000)
       expect(tones).toHaveLength(6)
+    })
 
+    it('Chime plays once; Off is silent; Test sound plays the chosen sound', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      const select = screen.getByLabelText('Sound when rest is over')
+      expect(select).toHaveValue('soft')
+      await user.click(screen.getByRole('button', { name: 'Test sound' }))
+      expect(tones.map((t) => t.freq)).toEqual([880, 659])
+
+      tones = []
+      await user.selectOptions(select, 'chime')
+      expect(localStorage.getItem('fitness-tracker:rest-sound')).toBe('chime')
+      await user.click(screen.getByRole('button', { name: 'Test sound' }))
+      expect(tones.map((t) => t.freq)).toEqual([1319, 1568, 2093])
+
+      tones = []
+      await user.click(tab('Log'))
+      await startRest(user)
+      await advance(95_000)
+      expect(tones.map((t) => t.freq)).toEqual([1047, 1047, 1047, 1319, 1568, 2093])
+
+      tones = []
       await user.click(tab('Settings'))
-      await user.click(screen.getByRole('checkbox', { name: /Beep when rest is over/ }))
+      await user.selectOptions(screen.getByLabelText('Sound when rest is over'), 'off')
+      expect(screen.getByRole('button', { name: 'Test sound' })).toBeDisabled()
       await user.click(tab('Log'))
       await user.click(screen.getByRole('button', { name: '+ Add set' }))
       await user.click(screen.getByRole('button', { name: 'Exercise 1 set 2 done' }))
       await advance(95_000)
-      expect(tones).toHaveLength(6)
-    })
-
-    it('has a Test sound button in Settings', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      render(<App />)
-      await user.click(await screen.findByRole('button', { name: 'Settings' }))
-      await user.click(screen.getByRole('button', { name: 'Test sound' }))
-      expect(tones.map((t) => t.freq)).toEqual([1319, 1568, 2093])
+      expect(tones).toEqual([])
     })
   })
 

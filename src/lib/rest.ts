@@ -36,8 +36,21 @@ export function readRestSec(): number {
 }
 export const saveRestSec = (sec: number) => write(SEC_KEY, String(sec))
 
-export const readRestSound = (): boolean => read(SOUND_KEY) !== 'off'
-export const saveRestSound = (on: boolean) => write(SOUND_KEY, on ? 'on' : 'off')
+/** How the end of rest sounds. */
+export type RestSound = 'off' | 'soft' | 'chime' | 'loud'
+export const REST_SOUNDS: { value: RestSound; label: string }[] = [
+  { value: 'soft', label: 'Soft' },
+  { value: 'chime', label: 'Chime' },
+  { value: 'loud', label: 'Loud' },
+  { value: 'off', label: 'Off (flash only)' },
+]
+
+/** Older versions stored "on"/"off"; "on" now means the soft sound. */
+export function readRestSound(): RestSound {
+  const v = read(SOUND_KEY)
+  return v === 'off' || v === 'chime' || v === 'loud' ? v : 'soft'
+}
+export const saveRestSound = (s: RestSound) => write(SOUND_KEY, s)
 
 const FLASH_KEY = 'fitness-tracker:rest-flash'
 export const readRestFlash = (): boolean => read(FLASH_KEY) !== 'off'
@@ -78,11 +91,10 @@ interface Tone {
   dur: number
 }
 
-/** Triangle waves sound round and bell-like but still carry on a phone speaker (a sine is too quiet, a square too harsh). */
-const WAVE: OscillatorType = 'triangle'
+
 
 /** Plays chime-like tones (quick attack, bell-style fade) through a compressor to keep them loud but clean. */
-function playTones(tones: Tone[], level = 1): void {
+function playTones(tones: Tone[], level = 1, wave: OscillatorType = 'triangle'): void {
   if (!audio) return
   if (audio.state === 'suspended') void audio.resume()
   const t0 = audio.currentTime + 0.01
@@ -93,7 +105,7 @@ function playTones(tones: Tone[], level = 1): void {
   for (const tone of tones) {
     const osc = audio.createOscillator()
     const gain = audio.createGain()
-    osc.type = WAVE
+    osc.type = wave
     osc.frequency.value = tone.freq
     const start = t0 + tone.at
     const end = start + tone.dur
@@ -107,8 +119,11 @@ function playTones(tones: Tone[], level = 1): void {
   }
 }
 
-/** "Rest over": a rising three-note chime (about 1.2 s), plus a vibration where supported. */
-export function restOverAlert(sound: boolean, vibrate = true): void {
+/**
+ * "Rest over" sound, plus a vibration where supported.
+ * Soft: a low, quiet sine ding-dong. Chime/Loud: a brighter rising triangle-wave chime.
+ */
+export function restOverAlert(sound: RestSound, vibrate = true): void {
   if (vibrate) {
     try {
       navigator.vibrate?.([300, 150, 300, 150, 500])
@@ -116,30 +131,45 @@ export function restOverAlert(sound: boolean, vibrate = true): void {
       /* not supported */
     }
   }
-  if (!sound) return
+  if (sound === 'off') return
   try {
-    playTones([
-      { freq: 1319, at: 0, dur: 0.35 },
-      { freq: 1568, at: 0.22, dur: 0.35 },
-      { freq: 2093, at: 0.44, dur: 0.8 },
-    ])
+    if (sound === 'soft') {
+      playTones(
+        [
+          { freq: 880, at: 0, dur: 0.6 },
+          { freq: 659, at: 0.3, dur: 0.9 },
+        ],
+        0.45,
+        'sine',
+      )
+    } else {
+      playTones([
+        { freq: 1319, at: 0, dur: 0.35 },
+        { freq: 1568, at: 0.22, dur: 0.35 },
+        { freq: 2093, at: 0.44, dur: 0.8 },
+      ])
+    }
   } catch {
     /* no sound available */
   }
 }
 
 /** Short pip for the last 3 seconds of rest. */
-export function countdownPip(sound: boolean): void {
-  if (!sound) return
+export function countdownPip(sound: RestSound): void {
+  if (sound === 'off') return
   try {
-    playTones([{ freq: 1047, at: 0, dur: 0.15 }], 0.7)
+    if (sound === 'soft') playTones([{ freq: 659, at: 0, dur: 0.12 }], 0.15, 'sine')
+    else playTones([{ freq: 1047, at: 0, dur: 0.15 }], sound === 'loud' ? 0.7 : 0.45)
   } catch {
     /* no sound available */
   }
 }
 
 /** For the Settings "Test sound" button (a tap, so it can also unlock audio on iPhone). */
-export function testRestAlert(): void {
+export function testRestAlert(sound: RestSound): void {
   unlockAudio()
-  restOverAlert(true)
+  restOverAlert(sound)
 }
+
+/** Only the loud sound repeats. */
+export const repeatsFor = (sound: RestSound) => (sound === 'loud' ? [2000, 4000] : [])

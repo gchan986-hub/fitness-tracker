@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { countdownPip, restOverAlert, type RestState } from '../lib/rest'
+import { countdownPip, repeatsFor, restOverAlert, type RestSound, type RestState } from '../lib/rest'
 import { formatDuration } from '../lib/units'
 import { RestFlash } from './RestFlash'
 
 interface Props {
   rest: RestState
-  sound: boolean
+  sound: RestSound
   /** Full-screen flash when rest is over. */
   flash?: boolean
   onAdjust: (deltaSec: number) => void
@@ -39,13 +39,13 @@ export function RestTimer({ rest, sound, flash = true, onAdjust, onDismiss }: Pr
     }
   }, [remaining, rest.endAt, rest.totalSec, sound])
 
-  // Alert once per rest period, then repeat twice (sound only) unless dismissed.
+  // Alert once per rest period; the loud sound then repeats twice unless dismissed.
   useEffect(() => {
     if (!over || alertedFor.current === rest.endAt) return
     alertedFor.current = rest.endAt
     repeats.current.forEach(clearTimeout)
     restOverAlert(sound)
-    repeats.current = [2000, 4000].map((ms) => setTimeout(() => restOverAlert(sound, false), ms))
+    repeats.current = repeatsFor(sound).map((ms) => setTimeout(() => restOverAlert(sound, false), ms))
   }, [over, rest.endAt, sound])
   useEffect(() => () => repeats.current.forEach(clearTimeout), [])
 

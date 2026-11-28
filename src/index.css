@@ -185,3 +185,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 @keyframes rest-flash { 0% { background: #16a34a; color: #ffffff; } 50% { background: #ffffff; color: #15803d; } }
 @media (prefers-reduced-motion: reduce) { .rest-flash { animation: none; } }
 .version { text-align: center; font-size: 0.8rem; margin-top: 1rem; }
+.sound-row .grow { flex: 1; min-width: 12rem; margin-bottom: 0.25rem; }
+.sound-row { align-items: flex-end; margin-bottom: 0.5rem; }

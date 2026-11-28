@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { clearProfile, clearRoutines, clearWorkouts, exportBackup, importBackup } from '../lib/db'
 import { todayLocal } from '../lib/id'
-import { REST_OPTIONS, testRestAlert } from '../lib/rest'
+import { REST_OPTIONS, REST_SOUNDS, testRestAlert, type RestSound } from '../lib/rest'
 import { formatDuration } from '../lib/units'
 import type { BodyWeight, Profile, Units } from '../lib/types'
 import { ProfileCard } from './ProfileCard'
@@ -17,8 +17,8 @@ interface Props {
   routineCount: number
   restSec: number
   onRestSecChange: (sec: number) => void
-  restSound: boolean
-  onRestSoundChange: (on: boolean) => void
+  restSound: RestSound
+  onRestSoundChange: (sound: RestSound) => void
   restFlash: boolean
   onRestFlashChange: (on: boolean) => void
   profile?: Profile
@@ -150,11 +150,22 @@ export function Settings({
           </select>
         </label>
         <div className="sound-row">
-          <label className="radio">
-            <input type="checkbox" checked={restSound} onChange={(e) => onRestSoundChange(e.target.checked)} /> Beep
-            when rest is over
+          <label className="field grow">
+            Sound when rest is over
+            <select value={restSound} onChange={(e) => onRestSoundChange(e.target.value as RestSound)}>
+              {REST_SOUNDS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </label>
-          <button type="button" className="secondary" onClick={testRestAlert}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={restSound === 'off'}
+            onClick={() => testRestAlert(restSound)}
+          >
             Test sound
           </button>
         </div>
@@ -169,7 +180,8 @@ export function Settings({
         </div>
         {previewFlash && <RestFlash onClose={() => setPreviewFlash(false)} />}
         <p className="muted">
-          Tap ✓ on a set to start the timer. You'll hear pips in the last 3 seconds, then the alert (repeated twice).
+          Tap ✓ on a set to start the timer. Quiet pips mark the last 3 seconds, then the sound plays. Soft is a quiet
+          ding-dong; Chime is brighter; Loud is the chime repeated twice.
         </p>
         <p className="muted">
           <strong>Can't hear it on iPhone?</strong> Turn off silent mode (the switch or Action button on the side). The

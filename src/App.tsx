@@ -28,6 +28,7 @@ import {
   saveRestSound,
   saveRestState,
   unlockAudio,
+  type RestSound,
   type RestState,
 } from './lib/rest'
 import { findRoutineByName, fullCatalog } from './lib/routines'
@@ -302,10 +303,10 @@ export default function App() {
                   saveRestSec(sec)
                 }}
                 restSound={restSound}
-                onRestSoundChange={(on) => {
-                  setRestSound(on)
-                  saveRestSound(on)
-                  if (on) unlockAudio()
+                onRestSoundChange={(sound: RestSound) => {
+                  setRestSound(sound)
+                  saveRestSound(sound)
+                  if (sound !== 'off') unlockAudio()
                 }}
                 restFlash={restFlash}
                 onRestFlashChange={(on) => {
