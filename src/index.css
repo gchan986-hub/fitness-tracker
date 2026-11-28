@@ -184,3 +184,4 @@ button:disabled { opacity: 0.5; cursor: default; }
 .rest-flash-sub { font-size: 1.25rem; font-weight: 600; opacity: 0.9; }
 @keyframes rest-flash { 0% { background: #16a34a; color: #ffffff; } 50% { background: #ffffff; color: #15803d; } }
 @media (prefers-reduced-motion: reduce) { .rest-flash { animation: none; } }
+.version { text-align: center; font-size: 0.8rem; margin-top: 1rem; }

@@ -78,11 +78,11 @@ interface Tone {
   dur: number
 }
 
-/**
- * Plays tones as a square wave at high pitch through a compressor: much louder on a phone speaker than a soft
- * sine beep, without distorting.
- */
-function playTones(tones: Tone[], level = 0.9): void {
+/** Triangle waves sound round and bell-like but still carry on a phone speaker (a sine is too quiet, a square too harsh). */
+const WAVE: OscillatorType = 'triangle'
+
+/** Plays chime-like tones (quick attack, bell-style fade) through a compressor to keep them loud but clean. */
+function playTones(tones: Tone[], level = 1): void {
   if (!audio) return
   if (audio.state === 'suspended') void audio.resume()
   const t0 = audio.currentTime + 0.01
@@ -93,13 +93,13 @@ function playTones(tones: Tone[], level = 0.9): void {
   for (const tone of tones) {
     const osc = audio.createOscillator()
     const gain = audio.createGain()
-    osc.type = 'square'
+    osc.type = WAVE
     osc.frequency.value = tone.freq
     const start = t0 + tone.at
     const end = start + tone.dur
     gain.gain.setValueAtTime(0.0001, start)
-    gain.gain.exponentialRampToValueAtTime(level, start + 0.01)
-    gain.gain.setValueAtTime(level, end - 0.03)
+    gain.gain.exponentialRampToValueAtTime(level, start + 0.02)
+    gain.gain.exponentialRampToValueAtTime(level * 0.35, start + tone.dur * 0.45)
     gain.gain.exponentialRampToValueAtTime(0.0001, end)
     osc.connect(gain).connect(out)
     osc.start(start)
@@ -107,7 +107,7 @@ function playTones(tones: Tone[], level = 0.9): void {
   }
 }
 
-/** "Rest over": beep-beep-BEEEP (about 1 s), plus a vibration where supported. */
+/** "Rest over": a rising three-note chime (about 1.2 s), plus a vibration where supported. */
 export function restOverAlert(sound: boolean, vibrate = true): void {
   if (vibrate) {
     try {
@@ -119,9 +119,9 @@ export function restOverAlert(sound: boolean, vibrate = true): void {
   if (!sound) return
   try {
     playTones([
-      { freq: 2093, at: 0, dur: 0.15 },
-      { freq: 2093, at: 0.25, dur: 0.15 },
-      { freq: 2637, at: 0.5, dur: 0.45 },
+      { freq: 1319, at: 0, dur: 0.35 },
+      { freq: 1568, at: 0.22, dur: 0.35 },
+      { freq: 2093, at: 0.44, dur: 0.8 },
     ])
   } catch {
     /* no sound available */
@@ -132,7 +132,7 @@ export function restOverAlert(sound: boolean, vibrate = true): void {
 export function countdownPip(sound: boolean): void {
   if (!sound) return
   try {
-    playTones([{ freq: 1568, at: 0, dur: 0.08 }], 0.6)
+    playTones([{ freq: 1047, at: 0, dur: 0.15 }], 0.7)
   } catch {
     /* no sound available */
   }

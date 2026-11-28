@@ -824,10 +824,10 @@ describe('App', () => {
       await advance(86_000)
       expect(tones).toEqual([])
       await advance(3_000) // 3, 2, 1
-      expect(tones.map((t) => t.freq)).toEqual([1568, 1568, 1568])
+      expect(tones.map((t) => t.freq)).toEqual([1047, 1047, 1047])
       await advance(1_000) // rest over
-      expect(tones.slice(3).map((t) => t.freq)).toEqual([2093, 2093, 2637])
-      expect(tones.every((t) => t.type === 'square')).toBe(true)
+      expect(tones.slice(3).map((t) => t.freq)).toEqual([1319, 1568, 2093])
+      expect(tones.every((t) => t.type === 'triangle')).toBe(true)
       await advance(4_500)
       expect(tones).toHaveLength(3 + 9)
       await advance(10_000)
@@ -859,7 +859,7 @@ describe('App', () => {
       render(<App />)
       await user.click(await screen.findByRole('button', { name: 'Settings' }))
       await user.click(screen.getByRole('button', { name: 'Test sound' }))
-      expect(tones.map((t) => t.freq)).toEqual([2093, 2093, 2637])
+      expect(tones.map((t) => t.freq)).toEqual([1319, 1568, 2093])
     })
   })
 
@@ -914,5 +914,24 @@ describe('App', () => {
       expect(screen.getByRole('timer', { name: 'Rest timer' })).toHaveTextContent('Rest over')
       expect(flash()).not.toBeInTheDocument()
     })
+  })
+
+  it('previews the flash from Settings and shows the app version', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      expect(screen.getByText(/^Version /)).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Test flash' }))
+      expect(screen.getByRole('button', { name: 'Rest over. Tap to continue' })).toBeInTheDocument()
+      await act(() => vi.advanceTimersByTime(5_000))
+      expect(screen.queryByRole('button', { name: 'Rest over. Tap to continue' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Test flash' }))
+      await user.click(screen.getByRole('button', { name: 'Rest over. Tap to continue' }))
+      expect(screen.queryByRole('button', { name: 'Rest over. Tap to continue' })).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

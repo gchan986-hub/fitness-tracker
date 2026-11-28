@@ -5,6 +5,8 @@ import { REST_OPTIONS, testRestAlert } from '../lib/rest'
 import { formatDuration } from '../lib/units'
 import type { BodyWeight, Profile, Units } from '../lib/types'
 import { ProfileCard } from './ProfileCard'
+import { RestFlash } from './RestFlash'
+import { FLASH_MS } from './RestTimer'
 
 interface Props {
   units: Units
@@ -49,6 +51,11 @@ export function Settings({
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const [deleteMessage, setDeleteMessage] = useState('')
+  const [previewFlash, setPreviewFlash] = useState(false)
+  const showFlash = () => {
+    setPreviewFlash(true)
+    setTimeout(() => setPreviewFlash(false), FLASH_MS)
+  }
 
   const deleteAll = async (what: 'workouts' | 'routines') => {
     const count = what === 'workouts' ? plural(workoutCount, 'workout') : plural(routineCount, 'routine')
@@ -151,10 +158,16 @@ export function Settings({
             Test sound
           </button>
         </div>
-        <label className="radio">
-          <input type="checkbox" checked={restFlash} onChange={(e) => onRestFlashChange(e.target.checked)} /> Flash the
-          screen when rest is over
-        </label>
+        <div className="sound-row">
+          <label className="radio">
+            <input type="checkbox" checked={restFlash} onChange={(e) => onRestFlashChange(e.target.checked)} /> Flash
+            the screen when rest is over
+          </label>
+          <button type="button" className="secondary" onClick={showFlash}>
+            Test flash
+          </button>
+        </div>
+        {previewFlash && <RestFlash onClose={() => setPreviewFlash(false)} />}
         <p className="muted">
           Tap ✓ on a set to start the timer. You'll hear pips in the last 3 seconds, then the alert (repeated twice).
         </p>
@@ -226,6 +239,7 @@ export function Settings({
         </div>
         {deleteMessage && <p role="status">{deleteMessage}</p>}
       </div>
+      <p className="version muted">Version {__APP_VERSION__}</p>
     </section>
   )
 }

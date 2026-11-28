@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { countdownPip, restOverAlert, type RestState } from '../lib/rest'
 import { formatDuration } from '../lib/units'
+import { RestFlash } from './RestFlash'
 
 interface Props {
   rest: RestState
@@ -75,10 +76,7 @@ export function RestTimer({ rest, sound, flash = true, onAdjust, onDismiss }: Pr
   return (
     <>
       {over && flash && now < rest.endAt + FLASH_MS && (
-        <button type="button" className="rest-flash" aria-label="Rest over. Tap to continue" onClick={onDismiss}>
-          <span className="rest-flash-title">REST OVER</span>
-          <span className="rest-flash-sub">Next set · tap anywhere</span>
-        </button>
+        <RestFlash onClose={onDismiss} />
       )}
       <div className={over ? 'rest-bar over' : 'rest-bar'} role="timer" aria-label="Rest timer">
         <div className="rest-progress" style={{ width: `${pct}%` }} />
