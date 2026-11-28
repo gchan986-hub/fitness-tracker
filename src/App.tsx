@@ -20,9 +20,11 @@ import {
 import { newId } from './lib/id'
 import {
   readRestSec,
+  readRestFlash,
   readRestSound,
   readRestState,
   saveRestSec,
+  saveRestFlash,
   saveRestSound,
   saveRestState,
   unlockAudio,
@@ -70,6 +72,7 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [restSec, setRestSec] = useState(readRestSec)
   const [restSound, setRestSound] = useState(readRestSound)
+  const [restFlash, setRestFlash] = useState(readRestFlash)
   const [rest, setRestState] = useState<RestState | null>(() => readRestState())
   const formRef = useRef<WorkoutFormHandle>(null)
 
@@ -304,12 +307,17 @@ export default function App() {
                   saveRestSound(on)
                   if (on) unlockAudio()
                 }}
+                restFlash={restFlash}
+                onRestFlashChange={(on) => {
+                  setRestFlash(on)
+                  saveRestFlash(on)
+                }}
               />
             )}
           </>
         )}
       </main>
-      {rest && <RestTimer rest={rest} sound={restSound} onAdjust={adjustRest} onDismiss={dismissRest} />}
+      {rest && <RestTimer rest={rest} sound={restSound} flash={restFlash} onAdjust={adjustRest} onDismiss={dismissRest} />}
       {toast && (
         <div className="toast" role="status">
           {toast}

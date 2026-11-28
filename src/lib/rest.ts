@@ -39,6 +39,10 @@ export const saveRestSec = (sec: number) => write(SEC_KEY, String(sec))
 export const readRestSound = (): boolean => read(SOUND_KEY) !== 'off'
 export const saveRestSound = (on: boolean) => write(SOUND_KEY, on ? 'on' : 'off')
 
+const FLASH_KEY = 'fitness-tracker:rest-flash'
+export const readRestFlash = (): boolean => read(FLASH_KEY) !== 'off'
+export const saveRestFlash = (on: boolean) => write(FLASH_KEY, on ? 'on' : 'off')
+
 /** A running timer from before the app was closed, if it hasn't long finished. */
 export function readRestState(now = Date.now()): RestState | null {
   try {

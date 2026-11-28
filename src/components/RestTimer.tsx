@@ -5,12 +5,14 @@ import { formatDuration } from '../lib/units'
 interface Props {
   rest: RestState
   sound: boolean
+  /** Full-screen flash when rest is over. */
+  flash?: boolean
   onAdjust: (deltaSec: number) => void
   onDismiss: () => void
 }
 
 /** Countdown bar shown above the tab bar between sets. */
-export function RestTimer({ rest, sound, onAdjust, onDismiss }: Props) {
+export function RestTimer({ rest, sound, flash = true, onAdjust, onDismiss }: Props) {
   const [now, setNow] = useState(() => Date.now())
   const alertedFor = useRef<number | null>(null)
   const pippedAt = useRef<string | null>(null)
@@ -68,28 +70,36 @@ export function RestTimer({ rest, sound, onAdjust, onDismiss }: Props) {
   const pct = rest.totalSec > 0 ? Math.min(100, (remaining / rest.totalSec) * 100) : 0
 
   return (
-    <div className={over ? 'rest-bar over' : 'rest-bar'} role="timer" aria-label="Rest timer">
-      <div className="rest-progress" style={{ width: `${pct}%` }} />
-      <span className="rest-time">{over ? 'Rest over · next set' : `Rest ${formatDuration(remaining)}`}</span>
-      <span className="rest-actions">
-        {over ? (
-          <button type="button" onClick={onDismiss}>
-            Dismiss
-          </button>
-        ) : (
-          <>
-            <button type="button" aria-label="15 seconds less" onClick={() => onAdjust(-15)}>
-              −15s
-            </button>
-            <button type="button" aria-label="15 seconds more" onClick={() => onAdjust(15)}>
-              +15s
-            </button>
+    <>
+      {over && flash && (
+        <button type="button" className="rest-flash" aria-label="Rest over. Tap to continue" onClick={onDismiss}>
+          <span className="rest-flash-title">REST OVER</span>
+          <span className="rest-flash-sub">Next set · tap anywhere</span>
+        </button>
+      )}
+      <div className={over ? 'rest-bar over' : 'rest-bar'} role="timer" aria-label="Rest timer">
+        <div className="rest-progress" style={{ width: `${pct}%` }} />
+        <span className="rest-time">{over ? 'Rest over · next set' : `Rest ${formatDuration(remaining)}`}</span>
+        <span className="rest-actions">
+          {over ? (
             <button type="button" onClick={onDismiss}>
-              Skip
+              Dismiss
             </button>
-          </>
-        )}
-      </span>
-    </div>
+          ) : (
+            <>
+              <button type="button" aria-label="15 seconds less" onClick={() => onAdjust(-15)}>
+                −15s
+              </button>
+              <button type="button" aria-label="15 seconds more" onClick={() => onAdjust(15)}>
+                +15s
+              </button>
+              <button type="button" onClick={onDismiss}>
+                Skip
+              </button>
+            </>
+          )}
+        </span>
+      </div>
+    </>
   )
 }

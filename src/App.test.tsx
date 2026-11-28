@@ -862,4 +862,43 @@ describe('App', () => {
       expect(tones.map((t) => t.freq)).toEqual([2093, 2093, 2637])
     })
   })
+
+  describe('rest over flash', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    })
+    afterEach(() => vi.useRealTimers())
+    const advance = async (ms: number) => {
+      for (let t = 0; t < ms; t += 1000) await act(() => vi.advanceTimersByTime(Math.min(1000, ms - t)))
+    }
+    const flash = () => screen.queryByRole('button', { name: 'Rest over. Tap to continue' })
+
+    it('fills the screen when rest is over; tapping it dismisses the timer', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await addExercise(user, 'Squat')
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      await advance(89_000)
+      expect(flash()).not.toBeInTheDocument()
+      await advance(1_000)
+      expect(flash()).toHaveTextContent('REST OVER')
+      await user.click(flash()!)
+      expect(flash()).not.toBeInTheDocument()
+      expect(screen.queryByRole('timer', { name: 'Rest timer' })).not.toBeInTheDocument()
+    })
+
+    it('can be turned off in Settings', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await user.click(await screen.findByRole('button', { name: 'Settings' }))
+      await user.click(screen.getByRole('checkbox', { name: /Flash the screen/ }))
+      expect(localStorage.getItem('fitness-tracker:rest-flash')).toBe('off')
+      await user.click(tab('Log'))
+      await addExercise(user, 'Squat')
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      await advance(91_000)
+      expect(screen.getByRole('timer', { name: 'Rest timer' })).toHaveTextContent('Rest over')
+      expect(flash()).not.toBeInTheDocument()
+    })
+  })
 })

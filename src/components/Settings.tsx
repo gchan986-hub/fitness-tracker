@@ -17,6 +17,8 @@ interface Props {
   onRestSecChange: (sec: number) => void
   restSound: boolean
   onRestSoundChange: (on: boolean) => void
+  restFlash: boolean
+  onRestFlashChange: (on: boolean) => void
   profile?: Profile
   bodyWeights: BodyWeight[]
   onSaveProfile: (p: Profile) => Promise<void>
@@ -36,6 +38,8 @@ export function Settings({
   onRestSecChange,
   restSound,
   onRestSoundChange,
+  restFlash,
+  onRestFlashChange,
   profile,
   bodyWeights,
   onSaveProfile,
@@ -147,6 +151,10 @@ export function Settings({
             Test sound
           </button>
         </div>
+        <label className="radio">
+          <input type="checkbox" checked={restFlash} onChange={(e) => onRestFlashChange(e.target.checked)} /> Flash the
+          screen when rest is over
+        </label>
         <p className="muted">
           Tap ✓ on a set to start the timer. You'll hear pips in the last 3 seconds, then the alert (repeated twice).
         </p>
