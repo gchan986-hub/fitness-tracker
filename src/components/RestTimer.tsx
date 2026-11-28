@@ -11,6 +11,9 @@ interface Props {
   onDismiss: () => void
 }
 
+/** How long the full-screen "rest over" flash stays up before closing by itself. */
+export const FLASH_MS = 5000
+
 /** Countdown bar shown above the tab bar between sets. */
 export function RestTimer({ rest, sound, flash = true, onAdjust, onDismiss }: Props) {
   const [now, setNow] = useState(() => Date.now())
@@ -71,7 +74,7 @@ export function RestTimer({ rest, sound, flash = true, onAdjust, onDismiss }: Pr
 
   return (
     <>
-      {over && flash && (
+      {over && flash && now < rest.endAt + FLASH_MS && (
         <button type="button" className="rest-flash" aria-label="Rest over. Tap to continue" onClick={onDismiss}>
           <span className="rest-flash-title">REST OVER</span>
           <span className="rest-flash-sub">Next set · tap anywhere</span>

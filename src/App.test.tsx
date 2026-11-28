@@ -887,6 +887,20 @@ describe('App', () => {
       expect(screen.queryByRole('timer', { name: 'Rest timer' })).not.toBeInTheDocument()
     })
 
+    it('closes by itself after 5 seconds, leaving the small bar', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<App />)
+      await addExercise(user, 'Squat')
+      await user.click(screen.getByRole('button', { name: 'Exercise 1 set 1 done' }))
+      await advance(90_000)
+      expect(flash()).toBeInTheDocument()
+      await advance(4_000)
+      expect(flash()).toBeInTheDocument()
+      await advance(1_000)
+      expect(flash()).not.toBeInTheDocument()
+      expect(screen.getByRole('timer', { name: 'Rest timer' })).toHaveTextContent('Rest over')
+    })
+
     it('can be turned off in Settings', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       render(<App />)
